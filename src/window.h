@@ -54,18 +54,18 @@ namespace Nano
         using onFramebufferSizeFunc = std::function<void(int, int)>;
         using onWindowCloseFunc     = std::function<void()>;
 
-        void registerOnResetFunc(onResetFunc func) { m_onResetFunc.push_back(func); }
-        void registerOnKeyFunc(onKeyFunc func) { m_onKeyFunc.push_back(func); }
-        void registerOnCharFunc(onCharFunc func) { m_onCharFunc.push_back(func); }
-        void registerOnCharModsFunc(onCharModsFunc func) { m_onCharModsFunc.push_back(func); }
-        void registerOnMouseButtonFunc(onMouseButtonFunc func) { m_onMouseButtonFunc.push_back(func); }
-        void registerOnCursorPosFunc(onCursorPosFunc func) { m_onCursorPosFunc.push_back(func); }
-        void registerOnCursorEnterFunc(onCursorEnterFunc func) { m_onCursorEnterFunc.push_back(func); }
-        void registerOnScrollFunc(onScrollFunc func) { m_onScrollFunc.push_back(func); }
-        void registerOnDropFunc(onDropFunc func) { m_onDropFunc.push_back(func); }
-        void registerOnWindowSizeFunc(onWindowSizeFunc func) { m_onWindowSizeFunc.push_back(func); }
-        void registerOnFramebufferSizeFunc(onFramebufferSizeFunc func) { m_onFramebufferSizeFunc.push_back(func); }
-        void registerOnWindowCloseFunc(onWindowCloseFunc func) { m_onWindowCloseFunc.push_back(func); }
+        void registerOnResetFunc(onResetFunc func) { m_on_reset_func.push_back(func); }
+        void registerOnKeyFunc(onKeyFunc func) { m_on_key_func.push_back(func); }
+        void registerOnCharFunc(onCharFunc func) { m_on_char_func.push_back(func); }
+        void registerOnCharModsFunc(onCharModsFunc func) { m_on_char_mods_func.push_back(func); }
+        void registerOnMouseButtonFunc(onMouseButtonFunc func) { m_on_mouse_button_func.push_back(func); }
+        void registerOnCursorPosFunc(onCursorPosFunc func) { m_on_cursor_pos_func.push_back(func); }
+        void registerOnCursorEnterFunc(onCursorEnterFunc func) { m_on_cursor_enter_func.push_back(func); }
+        void registerOnScrollFunc(onScrollFunc func) { m_on_scroll_func.push_back(func); }
+        void registerOnDropFunc(onDropFunc func) { m_on_drop_func.push_back(func); }
+        void registerOnWindowSizeFunc(onWindowSizeFunc func) { m_on_window_size_func.push_back(func); }
+        void registerOnFramebufferSizeFunc(onFramebufferSizeFunc func) { m_on_framebuffer_size_func.push_back(func); }
+        void registerOnWindowCloseFunc(onWindowCloseFunc func) { m_on_window_close_func.push_back(func); }
 
     protected:
         // event handler
@@ -164,62 +164,62 @@ namespace Nano
         // event exec
         void onReset()
         {
-            for (auto& func : m_onResetFunc)
+            for (auto& func : m_on_reset_func)
                 func();
         }
         void onKey(int key, int scancode, int action, int mods)
         {
-            for (auto& func : m_onKeyFunc)
+            for (auto& func : m_on_key_func)
                 func(key, scancode, action, mods);
         }
         void onChar(unsigned int codepoint)
         {
-            for (auto& func : m_onCharFunc)
+            for (auto& func : m_on_char_func)
                 func(codepoint);
         }
         void onCharMods(int codepoint, unsigned int mods)
         {
-            for (auto& func : m_onCharModsFunc)
+            for (auto& func : m_on_char_mods_func)
                 func(codepoint, mods);
         }
         void onMouseButton(int button, int action, int mods)
         {
-            for (auto& func : m_onMouseButtonFunc)
+            for (auto& func : m_on_mouse_button_func)
                 func(button, action, mods);
         }
         void onCursorPos(double xpos, double ypos)
         {
-            for (auto& func : m_onCursorPosFunc)
+            for (auto& func : m_on_cursor_pos_func)
                 func(xpos, ypos);
         }
         void onCursorEnter(int entered)
         {
-            for (auto& func : m_onCursorEnterFunc)
+            for (auto& func : m_on_cursor_enter_func)
                 func(entered);
         }
         void onScroll(double xoffset, double yoffset)
         {
-            for (auto& func : m_onScrollFunc)
+            for (auto& func : m_on_scroll_func)
                 func(xoffset, yoffset);
         }
         void onDrop(int count, const char** paths)
         {
-            for (auto& func : m_onDropFunc)
+            for (auto& func : m_on_drop_func)
                 func(count, paths);
         }
         void onWindowSize(int width, int height)
         {
-            for (auto& func : m_onWindowSizeFunc)
+            for (auto& func : m_on_window_size_func)
                 func(width, height);
         }
         void onFramebufferSize(int width, int height)
         {
-            for (auto& func : m_onFramebufferSizeFunc)
+            for (auto& func : m_on_framebuffer_size_func)
                 func(width, height);
         }
         void onWindowClose()
         {
-            for (auto& func : m_onWindowCloseFunc)
+            for (auto& func : m_on_window_close_func)
                 func();
         }
 
@@ -230,17 +230,17 @@ namespace Nano
         const char*                                    m_title {"Nano\0"};
 
         // events
-        std::vector<onResetFunc>           m_onResetFunc;
-        std::vector<onKeyFunc>             m_onKeyFunc;
-        std::vector<onCharFunc>            m_onCharFunc;
-        std::vector<onCharModsFunc>        m_onCharModsFunc;
-        std::vector<onMouseButtonFunc>     m_onMouseButtonFunc;
-        std::vector<onCursorPosFunc>       m_onCursorPosFunc;
-        std::vector<onCursorEnterFunc>     m_onCursorEnterFunc;
-        std::vector<onScrollFunc>          m_onScrollFunc;
-        std::vector<onDropFunc>            m_onDropFunc;
-        std::vector<onWindowSizeFunc>      m_onWindowSizeFunc;
-        std::vector<onFramebufferSizeFunc> m_onFramebufferSizeFunc;
-        std::vector<onWindowCloseFunc>     m_onWindowCloseFunc;
+        std::vector<onResetFunc>           m_on_reset_func;
+        std::vector<onKeyFunc>             m_on_key_func;
+        std::vector<onCharFunc>            m_on_char_func;
+        std::vector<onCharModsFunc>        m_on_char_mods_func;
+        std::vector<onMouseButtonFunc>     m_on_mouse_button_func;
+        std::vector<onCursorPosFunc>       m_on_cursor_pos_func;
+        std::vector<onCursorEnterFunc>     m_on_cursor_enter_func;
+        std::vector<onScrollFunc>          m_on_scroll_func;
+        std::vector<onDropFunc>            m_on_drop_func;
+        std::vector<onWindowSizeFunc>      m_on_window_size_func;
+        std::vector<onFramebufferSizeFunc> m_on_framebuffer_size_func;
+        std::vector<onWindowCloseFunc>     m_on_window_close_func;
     };
 } // namespace Nano
