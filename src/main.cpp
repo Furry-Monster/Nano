@@ -10,7 +10,9 @@ int main(int /*argc*/, const char** /*argv*/)
 
     try
     {
-        app.boot();
+        app.init();
+        app.run();
+        app.clean();
     }
     catch (const std::exception& e)
     {

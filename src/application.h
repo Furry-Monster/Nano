@@ -6,10 +6,11 @@
 
 namespace Nano
 {
+
     class Application
     {
     public:
-        Application();
+        Application() = default;
         ~Application() noexcept;
 
         Application(Application&&) noexcept            = default;
@@ -17,12 +18,12 @@ namespace Nano
         Application(const Application&)                = delete;
         Application& operator=(const Application&)     = delete;
 
-        void boot();
-
-    private:
         void init();
         void run();
         void clean();
+
+    private:
+        bool m_initialized {false};
 
         std::shared_ptr<Window>   m_window {nullptr};
         std::shared_ptr<Renderer> m_renderer {nullptr};
