@@ -28,7 +28,6 @@ if(NOT TARGET imgui)
         ${IMGUI_DIR}/backends
     )
     target_link_libraries(imgui PUBLIC glfw)
-    target_compile_definitions(imgui PUBLIC IMGUI_HAS_DOCK)
 endif()
 
 if(NOT TARGET stb)

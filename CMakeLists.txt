@@ -41,7 +41,7 @@ add_custom_command(TARGET copy_resources POST_BUILD
 
 add_custom_command(TARGET copy_resources POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
-    "${NANO_ROOT_DIR}/src/shaders"
+    "${NANO_ROOT_DIR}/shaders"
     "${NANO_ROOT_DIR}/bin/shaders"
     COMMENT "Copying shaders folder to bin/shaders..."
 )
