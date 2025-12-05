@@ -4,7 +4,7 @@
 #include <cstdint>
 #include <memory>
 #include "misc/logger.h"
-#include "renderer.h"
+#include "renderer/renderer.h"
 #include "window/window.h"
 
 namespace Nano

@@ -5,55 +5,8 @@
 
 namespace Nano
 {
-    VulkanRenderer::~VulkanRenderer() noexcept { clean(); }
-
-    VulkanRenderer::VulkanRenderer(VulkanRenderer&& other) noexcept :
-        m_window(std::move(other.m_window)), m_instance(std::move(other.m_instance)),
-        m_device(std::move(other.m_device)), m_swapchain(std::move(other.m_swapchain)),
-        m_command_pool(std::move(other.m_command_pool)), m_surface(other.m_surface),
-        m_image_available_semaphores(std::move(other.m_image_available_semaphores)),
-        m_render_finished_semaphores(std::move(other.m_render_finished_semaphores)),
-        m_in_flight_fences(std::move(other.m_in_flight_fences)),
-        m_images_in_flight(std::move(other.m_images_in_flight)), m_current_frame(other.m_current_frame),
-        m_frame_in_flight(other.m_frame_in_flight), m_framebuffer_resized(other.m_framebuffer_resized)
+    VulkanRenderer::VulkanRenderer(std::shared_ptr<Window> window) : Renderer(window)
     {
-        other.m_surface             = VK_NULL_HANDLE;
-        other.m_current_frame       = 0;
-        other.m_frame_in_flight     = false;
-        other.m_framebuffer_resized = false;
-    }
-
-    VulkanRenderer& VulkanRenderer::operator=(VulkanRenderer&& other) noexcept
-    {
-        if (this != &other)
-        {
-            clean();
-            m_window                     = std::move(other.m_window);
-            m_instance                   = std::move(other.m_instance);
-            m_device                     = std::move(other.m_device);
-            m_swapchain                  = std::move(other.m_swapchain);
-            m_command_pool               = std::move(other.m_command_pool);
-            m_surface                    = other.m_surface;
-            m_image_available_semaphores = std::move(other.m_image_available_semaphores);
-            m_render_finished_semaphores = std::move(other.m_render_finished_semaphores);
-            m_in_flight_fences           = std::move(other.m_in_flight_fences);
-            m_images_in_flight           = std::move(other.m_images_in_flight);
-            m_current_frame              = other.m_current_frame;
-            m_frame_in_flight            = other.m_frame_in_flight;
-            m_framebuffer_resized        = other.m_framebuffer_resized;
-
-            other.m_surface             = VK_NULL_HANDLE;
-            other.m_current_frame       = 0;
-            other.m_frame_in_flight     = false;
-            other.m_framebuffer_resized = false;
-        }
-        return *this;
-    }
-
-    void VulkanRenderer::init(std::shared_ptr<Window> window)
-    {
-        m_window = window;
-
         // Initialize instance
         m_instance.init("Nano", VK_MAKE_VERSION(1, 0, 0), true);
 
@@ -79,7 +32,7 @@ namespace Nano
         createSyncObjects();
     }
 
-    void VulkanRenderer::clean()
+    VulkanRenderer::~VulkanRenderer() noexcept
     {
         if (m_device.getDevice() != VK_NULL_HANDLE)
         {

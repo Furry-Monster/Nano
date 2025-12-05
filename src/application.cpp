@@ -3,6 +3,7 @@
 #include <chrono>
 #include <memory>
 #include "misc/logger.h"
+#include "renderer/vulkan/vulkan_renderer.h"
 #include "window/opengl/opengl_window.h"
 #include "window/vulkan/vulkan_window.h"
 
@@ -21,7 +22,7 @@ namespace Nano
                 vulkan_config.title     = m_config.window_config.title;
                 vulkan_config.resizable = m_config.window_config.resizable;
                 m_window                = std::make_shared<VulkanWindow>(vulkan_config);
-                m_renderer              = std::make_shared<Renderer>(m_window);
+                m_renderer              = std::make_shared<VulkanRenderer>(m_window);
                 break;
             }
             case GraphicsAPI::OpenGL: {

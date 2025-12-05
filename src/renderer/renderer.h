@@ -6,28 +6,23 @@
 namespace Nano
 {
     class Window;
-    class VulkanRenderer;
 
     class Renderer
     {
     public:
         explicit Renderer(std::shared_ptr<Window> window);
-        ~Renderer() noexcept;
+        virtual ~Renderer() noexcept = default;
 
         Renderer(Renderer&&) noexcept            = default;
         Renderer& operator=(Renderer&&) noexcept = default;
         Renderer(const Renderer&)                = delete;
         Renderer& operator=(const Renderer&)     = delete;
 
-        void init();
-        void clean();
+        virtual void beginFrame() = 0;
+        virtual void endFrame()   = 0;
 
-        void beginFrame();
-        void endFrame();
-
-    private:
-        std::shared_ptr<Window>         m_window;
-        std::unique_ptr<VulkanRenderer> m_vulkan_renderer;
+    protected:
+        std::shared_ptr<Window> m_window;
     };
 
 } // namespace Nano

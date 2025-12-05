@@ -3,6 +3,7 @@
 #include <vulkan/vulkan_core.h>
 #include <memory>
 #include <vector>
+#include "renderer/renderer.h"
 #include "vulkan_buffer.h"
 #include "vulkan_command_pool.h"
 #include "vulkan_device.h"
@@ -11,24 +12,19 @@
 
 namespace Nano
 {
-    class Window;
-
-    class VulkanRenderer
+    class VulkanRenderer final : public Renderer
     {
     public:
-        VulkanRenderer() = default;
-        ~VulkanRenderer() noexcept;
+        explicit VulkanRenderer(std::shared_ptr<Window> window);
+        ~VulkanRenderer() noexcept override;
 
-        VulkanRenderer(VulkanRenderer&&) noexcept;
-        VulkanRenderer& operator=(VulkanRenderer&&) noexcept;
-        VulkanRenderer(const VulkanRenderer&)            = delete;
-        VulkanRenderer& operator=(const VulkanRenderer&) = delete;
+        VulkanRenderer(VulkanRenderer&&) noexcept            = default;
+        VulkanRenderer& operator=(VulkanRenderer&&) noexcept = default;
+        VulkanRenderer(const VulkanRenderer&)                = delete;
+        VulkanRenderer& operator=(const VulkanRenderer&)     = delete;
 
-        void init(std::shared_ptr<Window> window);
-        void clean();
-
-        void beginFrame();
-        void endFrame();
+        void beginFrame() override;
+        void endFrame() override;
         bool isFrameInFlight() const { return m_frame_in_flight; }
 
         VkDevice               getDevice() const { return m_device.getDevice(); }
@@ -47,12 +43,11 @@ namespace Nano
         void cleanupSyncObjects();
         void recreateSwapchain();
 
-        std::shared_ptr<Window> m_window;
-        VulkanInstance          m_instance;
-        VulkanDevice            m_device;
-        VulkanSwapchain         m_swapchain;
-        VulkanCommandPool       m_command_pool;
-        VkSurfaceKHR            m_surface {VK_NULL_HANDLE};
+        VulkanInstance    m_instance;
+        VulkanDevice      m_device;
+        VulkanSwapchain   m_swapchain;
+        VulkanCommandPool m_command_pool;
+        VkSurfaceKHR      m_surface {VK_NULL_HANDLE};
 
         static constexpr uint32_t MAX_FRAMES_IN_FLIGHT = 2;
 
