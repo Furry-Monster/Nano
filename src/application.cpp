@@ -3,6 +3,7 @@
 #include <chrono>
 #include <memory>
 #include "misc/logger.h"
+#include "renderer/opengl/opengl_renderer.h"
 #include "renderer/vulkan/vulkan_renderer.h"
 #include "window/opengl/opengl_window.h"
 #include "window/vulkan/vulkan_window.h"
@@ -32,6 +33,7 @@ namespace Nano
                 opengl_config.title     = m_config.window_config.title;
                 opengl_config.resizable = m_config.window_config.resizable;
                 m_window                = std::make_shared<OpenGLWindow>(opengl_config);
+                m_renderer              = std::make_shared<OpenGLRenderer>(m_window);
                 break;
             }
         }
@@ -90,7 +92,11 @@ namespace Nano
                 break;
             }
             case GraphicsAPI::OpenGL: {
-
+                if (m_renderer)
+                {
+                    m_renderer->beginFrame();
+                    m_renderer->endFrame();
+                }
                 static_cast<OpenGLWindow*>(m_window.get())->swapBuffer();
                 break;
             }

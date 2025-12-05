@@ -9,6 +9,9 @@
 
 namespace Nano
 {
+    class OpenGLRenderer;
+    class VulkanRenderer;
+
     enum class GraphicsAPI : uint8_t
     {
         Vulkan,
