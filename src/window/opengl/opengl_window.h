@@ -10,16 +10,10 @@
 
 namespace Nano
 {
-    struct OpenGLWindowConfig : WindowConfig
-    {
-        int  msaa_samples {0};
-        bool vsync {false};
-    };
-
     class OpenGLWindow final : public Window
     {
     public:
-        explicit OpenGLWindow(const OpenGLWindowConfig& config = {});
+        explicit OpenGLWindow(const WindowConfig& config = {});
         virtual ~OpenGLWindow() noexcept override;
 
         OpenGLWindow(OpenGLWindow&&) noexcept            = default;
@@ -31,7 +25,7 @@ namespace Nano
         void        pollEvents() const override;
         GLFWwindow* getGLFWWindow() const override;
 
-        bool supportGL()const;
+        bool supportGL() const;
         int  getMSAASamples() const;
         bool isMSAAEnabled() const;
         bool isVSyncEnabled() const;

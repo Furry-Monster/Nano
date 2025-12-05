@@ -17,23 +17,13 @@ namespace Nano
         switch (m_graphics_api)
         {
             case GraphicsAPI::Vulkan: {
-                VulkanWindowConfig vulkan_config;
-                vulkan_config.width     = m_config.window_config.width;
-                vulkan_config.height    = m_config.window_config.height;
-                vulkan_config.title     = m_config.window_config.title;
-                vulkan_config.resizable = m_config.window_config.resizable;
-                m_window                = std::make_shared<VulkanWindow>(vulkan_config);
-                m_renderer              = std::make_shared<VulkanRenderer>(m_window);
+                m_window   = std::make_shared<VulkanWindow>(config.window_config);
+                m_renderer = std::make_shared<VulkanRenderer>(m_window);
                 break;
             }
             case GraphicsAPI::OpenGL: {
-                OpenGLWindowConfig opengl_config;
-                opengl_config.width     = m_config.window_config.width;
-                opengl_config.height    = m_config.window_config.height;
-                opengl_config.title     = m_config.window_config.title;
-                opengl_config.resizable = m_config.window_config.resizable;
-                m_window                = std::make_shared<OpenGLWindow>(opengl_config);
-                m_renderer              = std::make_shared<OpenGLRenderer>(m_window);
+                m_window   = std::make_shared<OpenGLWindow>(config.window_config);
+                m_renderer = std::make_shared<OpenGLRenderer>(m_window);
                 break;
             }
         }
@@ -59,6 +49,7 @@ namespace Nano
         while (!m_window->shouldClose())
         {
             auto delta_time = timeTick();
+
             logicalTick(delta_time);
             renderTick(delta_time);
         }
@@ -77,27 +68,31 @@ namespace Nano
         return delta_time;
     }
 
-    void Application::logicalTick(double /*delta_time*/) { m_window->pollEvents(); }
+    void Application::logicalTick(double /*delta_time*/)
+    {
+        m_window->pollEvents();
+        switch (m_graphics_api)
+        {
+            case GraphicsAPI::Vulkan:
+                break;
+            case GraphicsAPI::OpenGL:
+
+                break;
+        }
+    }
 
     void Application::renderTick(double /*delta_time*/)
     {
         switch (m_graphics_api)
         {
             case GraphicsAPI::Vulkan: {
-                if (m_renderer)
-                {
-                    m_renderer->beginFrame();
-                    m_renderer->endFrame();
-                }
+                m_renderer->beginFrame();
+                m_renderer->endFrame();
                 break;
             }
             case GraphicsAPI::OpenGL: {
-                if (m_renderer)
-                {
-                    m_renderer->beginFrame();
-                    m_renderer->endFrame();
-                }
-                static_cast<OpenGLWindow*>(m_window.get())->swapBuffer();
+                m_renderer->beginFrame();
+                m_renderer->endFrame();
                 break;
             }
         }

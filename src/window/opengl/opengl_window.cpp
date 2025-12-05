@@ -4,7 +4,7 @@
 
 namespace Nano
 {
-    OpenGLWindow::OpenGLWindow(const OpenGLWindowConfig& gl_config) : Window(gl_config)
+    OpenGLWindow::OpenGLWindow(const WindowConfig& gl_config) : Window(gl_config)
     {
         m_msaa_samples = gl_config.msaa_samples;
         m_vsync        = gl_config.vsync;

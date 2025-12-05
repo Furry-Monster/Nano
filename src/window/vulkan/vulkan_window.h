@@ -9,13 +9,10 @@
 
 namespace Nano
 {
-    struct VulkanWindowConfig : WindowConfig
-    {};
-
     class VulkanWindow final : public Window
     {
     public:
-        explicit VulkanWindow(const VulkanWindowConfig& config = {});
+        explicit VulkanWindow(const WindowConfig& config = {});
         virtual ~VulkanWindow() noexcept override;
 
         VulkanWindow(VulkanWindow&&) noexcept            = default;

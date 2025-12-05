@@ -20,7 +20,8 @@ namespace Nano
 
     struct ApplicationConfig
     {
-        GraphicsAPI  graphics_api {GraphicsAPI::Vulkan};
+        GraphicsAPI graphics_api {GraphicsAPI::Vulkan};
+
         WindowConfig window_config {};
         LoggerConfig logger_config {};
     };

@@ -3,7 +3,7 @@
 
 namespace Nano
 {
-    VulkanWindow::VulkanWindow(const VulkanWindowConfig& vk_config) : Window(vk_config)
+    VulkanWindow::VulkanWindow(const WindowConfig& vk_config) : Window(vk_config)
     {
         // init window handle
         if (glfwInit() == GLFW_FALSE)

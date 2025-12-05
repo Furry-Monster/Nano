@@ -16,6 +16,10 @@ namespace Nano
         int         height {480};
         std::string title {"Nano"};
         bool        resizable {true};
+
+        // opengl
+        int  msaa_samples {0};
+        bool vsync {false};
     };
 
     struct GLFWwindowDeleter

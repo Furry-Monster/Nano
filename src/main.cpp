@@ -9,7 +9,7 @@ int main(int /*argc*/, const char** /*argv*/)
     try
     {
         Nano::ApplicationConfig config;
-        config.graphics_api         = Nano::GraphicsAPI::Vulkan;
+        config.graphics_api         = Nano::GraphicsAPI::OpenGL;
         config.window_config.width  = 1280;
         config.window_config.height = 720;
         config.window_config.title  = "Nano Application";
