@@ -1,7 +1,7 @@
 #pragma once
 
 #include <memory>
-#include "window.h"
+#include "window/window.h"
 
 namespace Nano
 {
@@ -22,7 +22,6 @@ namespace Nano
         void init();
         void clean();
 
-        // Forward methods to VulkanRenderer
         void beginFrame();
         void endFrame();
 

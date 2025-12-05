@@ -6,13 +6,16 @@
 
 int main(int /*argc*/, const char** /*argv*/)
 {
-    Nano::Application app;
-
     try
     {
-        app.init();
+        Nano::ApplicationConfig config;
+        config.graphics_api         = Nano::GraphicsAPI::Vulkan;
+        config.window_config.width  = 1280;
+        config.window_config.height = 720;
+        config.window_config.title  = "Nano Application";
+
+        Nano::Application app(config);
         app.run();
-        app.clean();
     }
     catch (const std::exception& e)
     {

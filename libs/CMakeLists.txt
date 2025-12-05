@@ -35,8 +35,21 @@ if(NOT TARGET stb)
     target_include_directories(stb INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/stb)
 endif()
 
+if(NOT TARGET glad)
+    add_library(glad STATIC ${CMAKE_CURRENT_SOURCE_DIR}/glad/src/gl.c)
+    target_include_directories(glad PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/glad/include)
+endif()
+
+if(NOT TARGET spdlog)
+    set(SPDLOG_BUILD_EXAMPLE OFF CACHE BOOL "..." FORCE)
+    set(SPDLOG_BUILD_TESTS OFF CACHE BOOL "..." FORCE)
+    set(SPDLOG_BUILD_BENCH OFF CACHE BOOL "..." FORCE)
+    set(SPDLOG_INSTALL OFF CACHE BOOL "..." FORCE)
+    add_subdirectory(spdlog)
+endif()
+
 add_library(reflibs INTERFACE)
-target_link_libraries(reflibs INTERFACE stb glfw glm imgui)
+target_link_libraries(reflibs INTERFACE stb glfw glm imgui glad spdlog)
 
 if(UNIX AND NOT APPLE)
     find_package(Vulkan REQUIRED)

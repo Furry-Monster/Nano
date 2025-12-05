@@ -5,18 +5,14 @@ namespace Nano
 {
     Renderer::Renderer(std::shared_ptr<Window> window) : m_window(window)
     {
-        m_vulkan_renderer = std::make_unique<VulkanRenderer>();
+        if (m_window)
+        {
+            m_vulkan_renderer = std::make_unique<VulkanRenderer>();
+            m_vulkan_renderer->init(m_window);
+        }
     }
 
     Renderer::~Renderer() noexcept { clean(); }
-
-    void Renderer::init()
-    {
-        if (!m_window)
-            return;
-
-        m_vulkan_renderer->init(m_window);
-    }
 
     void Renderer::clean()
     {

@@ -1,7 +1,7 @@
 #include "vulkan_renderer.h"
 #include <GLFW/glfw3.h>
 #include <stdexcept>
-#include "window.h"
+#include "window/window.h"
 
 namespace Nano
 {
