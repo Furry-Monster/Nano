@@ -2,12 +2,6 @@
 
 mkdir build
 
-cd build
-
-cmake ..
-
-ninja 
-
-cd ..
+cmake --build build
 
 ./bin/Nano

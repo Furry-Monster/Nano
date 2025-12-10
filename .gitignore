@@ -4,3 +4,7 @@ bin/
 .cache/
 .vscode/
 __pycache__/
+
+*.sb
+
+debug.sh
