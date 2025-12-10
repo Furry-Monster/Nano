@@ -4,14 +4,22 @@
 
 代码比较混乱并且存在一些 Vulkan 错误，后续会慢慢修复，由于个人对 Vulkan API不太熟悉，周期可能较长，如果可以帮忙修复的话可以提一个PR。
 
+![showreal](showreal.png)
+
 ## 构建
 
 ```bash
+
+cd shaders
+chmod +x compile.sh
+./compile.sh
+
+cd ../
+
 mkdir build
-cd build
-cmake ..
-make
+cmake --build build
 ```
+
 
 ## 运行
 
@@ -20,9 +28,10 @@ make
 ## 依赖
 
 - CMake 3.20+
-- C++17 编译器
+- C++17 编译器,不支持MSVC
 - Vulkan SDK
 - GLFW
+- glslc 或者 glslangValidator
 
 ## 项目结构
 
