@@ -62,11 +62,6 @@ if(UNIX AND NOT APPLE)
     target_include_directories(reflibs INTERFACE
         ${Vulkan_INCLUDE_DIRS}
     )
-elseif(WIN32)
-    find_package(Vulkan REQUIRED)
-    target_link_libraries(reflibs INTERFACE
-        Vulkan::Vulkan
-    )
 elseif(APPLE)
     find_package(Vulkan REQUIRED)
     target_link_libraries(reflibs INTERFACE

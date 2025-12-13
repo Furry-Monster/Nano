@@ -16,11 +16,7 @@ if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Debug)
 endif()
 
-if(NOT MSVC)
-    add_compile_options(-Wall -Wextra)
-else()
-    add_compile_options(/W4)
-endif()
+add_compile_options(-Wall -Wextra)
 
 set(NANO_ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
 set(CMAKE_INSTALL_PREFIX "${NANO_ROOT_DIR}/bin")
