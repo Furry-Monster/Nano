@@ -1,6 +1,6 @@
 #pragma once
 #include <string>
-#include "BattleFireVulkan.h"
+#include "Renderer.h"
 enum class ERenderPassType
 {
     ERPT_GRAPHICS,

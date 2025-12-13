@@ -1,5 +1,5 @@
 #include "RenderPass.h"
-#include "BattleFireVulkan.h"
+#include "Renderer.h"
 void RenderPass::SetVSPS(const char* inVSPath, const char* inFSPath)
 {
     mVertexShader = CompileShader(inVSPath);

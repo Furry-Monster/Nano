@@ -4,8 +4,8 @@
 #include <cmath>
 #include "../math/matrix4.h"
 #include "../math/quaternion.h"
-#include "../render/BattleFireVulkan.h"
 #include "../render/RenderPass.h"
+#include "../render/Renderer.h"
 #include "../render/StaticMesh.h"
 #include "SceneNode.h"
 #define _4MB 4194304

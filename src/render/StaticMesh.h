@@ -3,8 +3,8 @@
 #include <unordered_map>
 #include <vector>
 #include "../math/float4.h"
-#include "BattleFireVulkan.h"
 #include "Material.h"
+#include "Renderer.h"
 
 struct StaticMeshVertexData
 {

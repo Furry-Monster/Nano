@@ -1,5 +1,5 @@
 #include "StaticMesh.h"
-#include "BattleFireVulkan.h"
+#include "Renderer.h"
 
 std::vector<VkVertexInputBindingDescription>   StaticMesh::mVertexInputBindingDescriptions;
 std::vector<VkVertexInputAttributeDescription> StaticMesh::mVertexInputAttributeDescriptions;

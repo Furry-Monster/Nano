@@ -2,7 +2,7 @@
 #include <GLFW/glfw3.h>
 #include <stdio.h>
 #include <chrono>
-#include "render/BattleFireVulkan.h"
+#include "render/Renderer.h"
 #include "scene/Scene.h"
 
 static void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods)
@@ -24,17 +24,15 @@ int main()
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
 
-    int         canvasWidth  = 1280;
-    int         canvasHeight = 720;
-    GLFWwindow* window = glfwCreateWindow(canvasWidth, canvasHeight, "Nano Cluster Visualization", nullptr, nullptr);
+    constexpr int canvasWidth  = 1280;
+    constexpr int canvasHeight = 720;
+    GLFWwindow*   window = glfwCreateWindow(canvasWidth, canvasHeight, "Nano Cluster Visualization", nullptr, nullptr);
     if (!window)
     {
         printf("Failed to create GLFW window\n");
         glfwTerminate();
         return -1;
     }
-
-    printf("canvas : %d x %d\n", canvasWidth, canvasHeight);
 
     InitVulkanUserData initVulkanUserData = {window};
     bool               vulkanInited       = InitVulkan(&initVulkanUserData, canvasWidth, canvasHeight);
@@ -53,17 +51,13 @@ int main()
     auto lastTime = std::chrono::high_resolution_clock::now();
     while (!glfwWindowShouldClose(window))
     {
+        auto currentTime        = std::chrono::high_resolution_clock::now();
+        auto frameTime          = std::chrono::duration_cast<std::chrono::milliseconds>(currentTime - lastTime).count();
+        lastTime                = currentTime;
+        float frameTimeInSecond = float(frameTime) / 1000.0f;
+
         glfwPollEvents();
-
-        if (vulkanInited)
-        {
-            auto currentTime = std::chrono::high_resolution_clock::now();
-            auto frameTime   = std::chrono::duration_cast<std::chrono::milliseconds>(currentTime - lastTime).count();
-            lastTime         = currentTime;
-            float frameTimeInSecond = float(frameTime) / 1000.0f;
-
-            RenderOneFrame(frameTimeInSecond);
-        }
+        RenderOneFrame(frameTimeInSecond);
     }
 
     glfwDestroyWindow(window);
