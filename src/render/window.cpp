@@ -1,5 +1,4 @@
 #include "window.h"
-#include "GLFW/glfw3.h"
 #include "misc/logger.h"
 
 namespace Nano

@@ -1,5 +1,5 @@
 #include "engine.h"
-#include <chrono>
+
 #include <exception>
 #include "misc/logger.h"
 #include "render/window.h"
