@@ -22,7 +22,7 @@ namespace Nano
         }
         catch (const std::exception& e)
         {
-            ERROR("Engine error: " + e.what());
+            ERROR("Engine error: %s", e.what());
         }
 
         clean();

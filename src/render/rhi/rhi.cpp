@@ -80,7 +80,7 @@ namespace Nano
         uint32_t prefered_layer_index = 0;
         for (uint32_t i = 0; i < layer_cnt; ++i)
         {
-            DEBUG("detect layer : " + layer_properties[i].layerName);
+            DEBUG("detect layer : %s", layer_properties[i].layerName);
             if (std::strstr(layer_properties[i].layerName, "validation") != nullptr)
             {
                 m_prefered_layers[prefered_layer_index] = new char[64];

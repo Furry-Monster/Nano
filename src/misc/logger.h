@@ -4,6 +4,8 @@
 #include <spdlog/logger.h>
 #include <cstdint>
 #include <memory>
+#include <string>
+#include "spdlog/fmt/bundled/printf.h"
 
 namespace Nano
 {
@@ -63,8 +65,23 @@ namespace Nano
         std::shared_ptr<spdlog::logger> m_spd_logger;
     };
 
+    template<typename... Args>
+    inline std::string formatLogMessage(const char* function, const char* fmt, Args&&... args)
+    {
+        std::string prefix = "[" + std::string(function) + "] ";
+        if constexpr (sizeof...(Args) == 0)
+        {
+            return prefix + fmt;
+        }
+        else
+        {
+            std::string full_fmt = prefix + fmt;
+            return fmt::sprintf(full_fmt.c_str(), std::forward<Args>(args)...);
+        }
+    }
+
 #define LOG_HELPER(LOG_LEVEL, ...) \
-    Nano::Logger::instance().log(LOG_LEVEL, "[" + std::string(__FUNCTION__) + "] " + __VA_ARGS__)
+    Nano::Logger::instance().log(LOG_LEVEL, Nano::formatLogMessage(__FUNCTION__, __VA_ARGS__))
 #define DEBUG(...) LOG_HELPER(Nano::Logger::LogLevel::debug, __VA_ARGS__)
 #define INFO(...) LOG_HELPER(Nano::Logger::LogLevel::info, __VA_ARGS__)
 #define WARN(...) LOG_HELPER(Nano::Logger::LogLevel::warn, __VA_ARGS__)
