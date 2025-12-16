@@ -1,16 +1,32 @@
-*** Nano-old 的主要问题：
-全局状态过多：Renderer.cpp 中大量静态变量（sVulkanInstance, sDevice, sSwapChain 等）
-函数式设计：缺少封装，全局函数暴露实现细节
-资源管理混乱：缺少 RAII，手动管理生命周期
-职责不清：Renderer 既管初始化又管资源创建
-场景管理混乱：Scene.cpp 中大量全局变量
+*** 重构原因事项
+Nano-old 的主要问题：
+ - 全局状态过多：Renderer.cpp 中大量静态变量（sVulkanInstance, sDevice, sSwapChain 等）
+ - 函数式设计：缺少封装，全局函数暴露实现细节
+ - 资源管理混乱：缺少 RAII，手动管理生命周期
+ - 职责不清：Renderer 既管初始化又管资源创建
+ - 场景管理混乱：Scene.cpp 中大量全局变量
+
+
+
 
 
 *** 重新设计架构
 1. 数学库层（src/math/）
-保持现有接口，仅做命名空间封装
-Float4, Matrix3, Matrix4, Quaternion 类
-功能不变，放入 Nano::Math 命名空间
+case 1
+{
+    保持现有接口，仅做命名空间封装
+    Float4, Matrix3, Matrix4, Quaternion 类
+    功能不变，放入 Nano::Math 命名空间
+}
+case2
+{
+    use glm instead
+}
+case3
+{
+    SIMD optmized math lib
+}
+
 2. RHI 层（src/render/rhi/）
 将 Renderer.cpp 的全局函数封装为类：
 核心类设计：
@@ -56,6 +72,7 @@ DescriptorSet 类
 成员：VkDescriptorSet, VkDescriptorPool
 方法：allocate(), updateBuffer(), updateTexture()
 封装原描述符相关逻辑
+
 3. 渲染资源层（src/render/）
 Material 类（重构）
 职责：材质管理
@@ -72,6 +89,7 @@ RenderPass 类（重构）
 成员：Pipeline, DescriptorSet, 资源绑定列表
 方法：setComputeShader(), setGraphicsShaders(), bindResource(), execute()
 保持接口，内部使用新的 RHI 类
+
 4. 场景管理层（src/scene/）
 Scene 类（重构）
 职责：场景管理
@@ -89,6 +107,7 @@ Camera 类（新增）
 成员：position, target, projection matrix, view matrix
 方法：setPerspective(), lookAt(), getViewMatrix(), getProjectionMatrix()
 封装原 Scene.cpp 中的相机相关逻辑
+
 5. Engine 层集成
 Engine 类（扩展）
 添加成员：RHI* m_rhi, Scene* m_scene
@@ -96,6 +115,13 @@ init() 中：初始化 RHI，创建 Scene
 update() 中：调用 Scene::update()
 render() 中：调用 Scene::render()
 clean() 中：清理 Scene 和 RHI
+
+
+
+
+
+
+
 
 *** 移植TODO List
 第一步：数学库
@@ -127,10 +153,18 @@ clean() 中：清理 Scene 和 RHI
 在 Engine::render() 中调用 Scene::render()
 在 Engine::clean() 中清理资源
 
+
+
+
+
+
+
+
+
 *** 笔记
-四、设计原则
-RAII：所有资源类在析构时自动清理
-单一职责：每个类只负责一个功能
-依赖注入：通过构造函数或方法传入依赖
-封装：隐藏 Vulkan 细节，提供高级接口
-命名空间：使用 Nano::Render, Nano::Scene, Nano::Math 等
+设计原则:
+ - RAII：所有资源类在析构时自动清理
+ - 单一职责：每个类只负责一个功能
+ - 依赖注入：通过构造函数或方法传入依赖
+ - 封装：隐藏 Vulkan 细节，提供高级接口 rhi
+ - 命名空间：使用 Nano::Render, Nano::Scene, Nano::Math 等
