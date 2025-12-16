@@ -39,7 +39,7 @@ namespace Nano
 
         m_window.reset(glfw_window);
 
-        INFO("Window initialized.")
+        INFO("Window initialized.");
     }
 
     Window::~Window() noexcept

@@ -58,12 +58,12 @@ namespace Nano
 
     extern Logger g_logger;
 
-#define LOG_HELPER(LOG_LEVEL, ...) Nano::g_logger.log(LOG_LEVEL, "[" + std::string(__FUNCTION__) + "] " + __VA_ARGS__);
-#define DEBUG(...) LOG_HELPER(Nano::Logger::LogLevel::debug, __VA_ARGS__);
-#define INFO(...) LOG_HELPER(Nano::Logger::LogLevel::info, __VA_ARGS__);
-#define WARN(...) LOG_HELPER(Nano::Logger::LogLevel::warn, __VA_ARGS__);
-#define ERROR(...) LOG_HELPER(Nano::Logger::LogLevel::error, __VA_ARGS__);
-#define FATAL(...) LOG_HELPER(Nano::Logger::LogLevel::fatal, __VA_ARGS__);
+#define LOG_HELPER(LOG_LEVEL, ...) Nano::g_logger.log(LOG_LEVEL, "[" + std::string(__FUNCTION__) + "] " + __VA_ARGS__)
+#define DEBUG(...) LOG_HELPER(Nano::Logger::LogLevel::debug, __VA_ARGS__)
+#define INFO(...) LOG_HELPER(Nano::Logger::LogLevel::info, __VA_ARGS__)
+#define WARN(...) LOG_HELPER(Nano::Logger::LogLevel::warn, __VA_ARGS__)
+#define ERROR(...) LOG_HELPER(Nano::Logger::LogLevel::error, __VA_ARGS__)
+#define FATAL(...) LOG_HELPER(Nano::Logger::LogLevel::fatal, __VA_ARGS__)
 
 } // namespace Nano
 

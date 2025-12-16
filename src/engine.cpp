@@ -63,12 +63,6 @@ namespace Nano
     {
         if (m_is_running)
             return;
-
-        if (!g_window.getGLFWWindow())
-        {
-            ERROR("Window is not initialized. Please ensure Window is created before Engine::init()");
-            throw std::runtime_error("Window initialization failed");
-        }
     }
 
     void Engine::update(double deltaTime)
