@@ -1,0 +1,136 @@
+*** Nano-old 的主要问题：
+全局状态过多：Renderer.cpp 中大量静态变量（sVulkanInstance, sDevice, sSwapChain 等）
+函数式设计：缺少封装，全局函数暴露实现细节
+资源管理混乱：缺少 RAII，手动管理生命周期
+职责不清：Renderer 既管初始化又管资源创建
+场景管理混乱：Scene.cpp 中大量全局变量
+
+
+*** 重新设计架构
+1. 数学库层（src/math/）
+保持现有接口，仅做命名空间封装
+Float4, Matrix3, Matrix4, Quaternion 类
+功能不变，放入 Nano::Math 命名空间
+2. RHI 层（src/render/rhi/）
+将 Renderer.cpp 的全局函数封装为类：
+核心类设计：
+RHI 类（单例或通过 Engine 管理）
+职责：Vulkan 实例、设备、队列管理
+成员：VkInstance, VkDevice, VkPhysicalDevice, VkQueue（图形/呈现）
+方法：initialize(), cleanup(), getDevice(), getQueue() 等
+将原 InitVulkan() 逻辑封装到 initialize()
+SwapChain 类
+职责：交换链管理
+成员：VkSwapchainKHR, VkImage[], VkImageView[], VkFramebuffer[], VkRenderPass
+方法：create(), acquireNextImage(), present(), getRenderPass()
+封装原 InitSwapchain(), BeginSwapChainRenderPass(), EndSwapChainRenderPass()
+Buffer 类（RAII）
+职责：Vulkan 缓冲区封装
+成员：VkBuffer, VkDeviceMemory, size
+方法：create(), uploadData(), map(), unmap()
+析构函数自动清理资源
+替代原 BattleFireBuffer 结构体
+Texture 类（RAII）
+职责：纹理/图像管理
+成员：VkImage, VkDeviceMemory, VkImageView, VkFormat, width, height
+方法：create(), createFromFile(), getImageView()
+支持 2D 和 CubeMap
+替代原 Texture 和 Texture2D 结构体
+Shader 类
+职责：着色器模块管理
+成员：VkShaderModule
+方法：loadFromFile(), getModule()
+封装原 CompileShader()
+Pipeline 类
+职责：管线状态对象管理
+成员：VkPipeline, VkPipelineLayout, VkDescriptorSetLayout
+方法：createGraphicsPipeline(), createComputePipeline()
+封装原 CreatePSO(), CreatePSOVGF(), CreatePSOVTF()
+CommandBuffer 类
+职责：命令缓冲区管理
+成员：VkCommandBuffer, VkCommandPool
+方法：begin(), end(), submit(), reset()
+封装原 CreateCommandBuffer(), BeginCommandBuffer()
+DescriptorSet 类
+职责：描述符集管理
+成员：VkDescriptorSet, VkDescriptorPool
+方法：allocate(), updateBuffer(), updateTexture()
+封装原描述符相关逻辑
+3. 渲染资源层（src/render/）
+Material 类（重构）
+职责：材质管理
+成员：Pipeline 指针, DescriptorSet, Shader 模块集合
+方法：setUniformBuffer(), setTexture(), bind()
+保持接口，内部使用新的 RHI 类
+StaticMesh 类（重构）
+职责：静态网格管理
+成员：Buffer* (VBO), Buffer* (IBO), Material, 顶点数据
+方法：loadFromFile(), draw()
+使用新的 Buffer 类替代 BattleFireBuffer*
+RenderPass 类（重构）
+职责：渲染通道管理（计算/图形）
+成员：Pipeline, DescriptorSet, 资源绑定列表
+方法：setComputeShader(), setGraphicsShaders(), bindResource(), execute()
+保持接口，内部使用新的 RHI 类
+4. 场景管理层（src/scene/）
+Scene 类（重构）
+职责：场景管理
+成员：SceneNode* 根节点, Camera, 全局常量 Buffer, 各种 RenderPass
+方法：initialize(), update(), render(), onKeyEvent()
+将原 InitScene(), RenderOneFrame(), OnKeyUp() 封装为方法
+所有原全局变量改为成员变量
+SceneNode 类（保持）
+职责：场景节点
+成员：Transform, StaticMesh, 子节点列表
+方法：draw(), updateTransform()
+基本保持不变，使用新的 Material 和 StaticMesh
+Camera 类（新增）
+职责：相机管理
+成员：position, target, projection matrix, view matrix
+方法：setPerspective(), lookAt(), getViewMatrix(), getProjectionMatrix()
+封装原 Scene.cpp 中的相机相关逻辑
+5. Engine 层集成
+Engine 类（扩展）
+添加成员：RHI* m_rhi, Scene* m_scene
+init() 中：初始化 RHI，创建 Scene
+update() 中：调用 Scene::update()
+render() 中：调用 Scene::render()
+clean() 中：清理 Scene 和 RHI
+
+*** 移植TODO List
+第一步：数学库
+创建 src/math/ 目录
+移植 float4, matrix4, quaternion
+放入 Nano::Math 命名空间
+保持接口不变
+第二步：RHI 核心类
+创建 src/render/rhi/ 目录
+先实现 RHI 类（Vulkan 初始化）
+实现 Buffer 类（RAII）
+实现 Texture 类（RAII）
+实现 Shader 类
+实现 SwapChain 类
+实现 Pipeline 类
+实现 CommandBuffer 类
+实现 DescriptorSet 类
+第三步：渲染资源
+重构 Material 类，使用新的 RHI 类
+重构 StaticMesh 类，使用新的 Buffer 类
+重构 RenderPass 类，使用新的 Pipeline 和 CommandBuffer
+第四步：场景管理
+创建 Camera 类
+重构 Scene 类，将所有全局变量改为成员变量
+保持 SceneNode 基本不变
+第五步：Engine 集成
+在 Engine::init() 中初始化 RHI 和 Scene
+在 Engine::update() 中调用 Scene::update()
+在 Engine::render() 中调用 Scene::render()
+在 Engine::clean() 中清理资源
+
+*** 笔记
+四、设计原则
+RAII：所有资源类在析构时自动清理
+单一职责：每个类只负责一个功能
+依赖注入：通过构造函数或方法传入依赖
+封装：隐藏 Vulkan 细节，提供高级接口
+命名空间：使用 Nano::Render, Nano::Scene, Nano::Math 等
