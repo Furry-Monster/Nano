@@ -23,13 +23,11 @@ namespace Nano
     class Window final
     {
     public:
-        Window();
-        ~Window() noexcept;
-
-        Window(const Window& other)                = delete;
-        Window& operator=(const Window& other)     = delete;
-        Window(Window&& other) noexcept            = delete;
-        Window& operator=(Window&& other) noexcept = delete;
+        static Window& instance()
+        {
+            static Window s_window;
+            return s_window;
+        }
 
         bool shouldClose();
         void pollEvents();
@@ -66,6 +64,14 @@ namespace Nano
         void registerOnWindowCloseFunc(OnWindowCloseFunc func) { m_on_window_close_func.push_back(func); }
 
     protected:
+        Window();
+        ~Window() noexcept;
+
+        Window(const Window& other)                = delete;
+        Window& operator=(const Window& other)     = delete;
+        Window(Window&& other) noexcept            = delete;
+        Window& operator=(Window&& other) noexcept = delete;
+
         static void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods)
         {
             Window* app = reinterpret_cast<Window*>(glfwGetWindowUserPointer(window));
@@ -238,8 +244,6 @@ namespace Nano
         std::vector<OnFramebufferSizeFunc> m_on_framebuffer_size_func;
         std::vector<OnWindowCloseFunc>     m_on_window_close_func;
     };
-
-    extern Window g_window;
 
 } // namespace Nano
 

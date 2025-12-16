@@ -53,6 +53,4 @@ namespace Nano
     bool Window::shouldClose() { return glfwWindowShouldClose(m_window.get()); }
 
     void Window::pollEvents() { glfwPollEvents(); }
-
-    Window g_window;
 } // namespace Nano

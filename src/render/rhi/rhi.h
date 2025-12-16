@@ -9,13 +9,11 @@ namespace Nano
     class RHI final
     {
     public:
-        RHI();
-        ~RHI() noexcept;
-
-        RHI(const RHI&)            = delete;
-        RHI& operator=(const RHI&) = delete;
-        RHI(RHI&&)                 = delete;
-        RHI& operator=(RHI&&)      = delete;
+        static RHI& instance()
+        {
+            static RHI s_rhi;
+            return s_rhi;
+        }
 
         VkDevice getDevice() const;
         VkQueue  getQueue() const;
@@ -29,7 +27,9 @@ namespace Nano
         uint32_t     m_prefered_layer_cnt {0};
         char**       m_prefered_layers {nullptr};
 
-        VkDebugReportCallbackEXT m_debug_report_callback;
+        VkDebugReportCallbackEXT            m_debug_report_callback {VK_NULL_HANDLE};
+        PFN_vkCreateDebugReportCallbackEXT  m_vkCreateDebugReportCallbackEXT {VK_NULL_HANDLE};
+        PFN_vkDestroyDebugReportCallbackEXT m_vkDestroyDebugReportCallbackEXT {VK_NULL_HANDLE};
 
         VkSurfaceKHR     m_surface {VK_NULL_HANDLE};
         VkDevice         m_device {VK_NULL_HANDLE};
@@ -39,15 +39,23 @@ namespace Nano
         VkQueue          m_graphic_queue {VK_NULL_HANDLE};
         VkQueue          m_present_queue {VK_NULL_HANDLE};
 
+    protected:
+        RHI();
+        ~RHI() noexcept;
+
+        RHI(const RHI&)            = delete;
+        RHI& operator=(const RHI&) = delete;
+        RHI(RHI&&)                 = delete;
+        RHI& operator=(RHI&&)      = delete;
+
     private:
         bool initInstance();
         bool initDebugger();
         bool initSurface();
         bool initPhysicalDevice();
         bool initDevice();
+        void loadDebugExtensionFunctions();
     };
-
-    extern RHI g_rhi;
 
 } // namespace Nano
 

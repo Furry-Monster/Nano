@@ -35,6 +35,4 @@ namespace Nano
         spdlog::drop_all();
         m_spd_logger.reset();
     }
-
-    Logger g_logger;
 } // namespace Nano

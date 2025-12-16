@@ -2,6 +2,7 @@
 
 #include <exception>
 #include "misc/logger.h"
+#include "render/rhi/rhi.h"
 #include "render/window.h"
 
 namespace Nano
@@ -32,7 +33,7 @@ namespace Nano
         m_curr_time  = Clock::now();
         m_is_running = true;
 
-        while (!g_window.shouldClose())
+        while (!Window::instance().shouldClose())
         {
             // time calc and clamp
             TimePoint                     now_time   = Clock::now();
@@ -63,11 +64,14 @@ namespace Nano
     {
         if (m_is_running)
             return;
+
+        Window::instance();
+        RHI::instance();
     }
 
     void Engine::update(double deltaTime)
     {
-        g_window.pollEvents();
+        Window::instance().pollEvents();
 
         // TODO: other system updates;
     }

@@ -42,7 +42,11 @@ namespace Nano
             FATAL("Failed when init vulkan logical device");
     }
 
-    RHI::~RHI() noexcept {}
+    RHI::~RHI() noexcept
+    {
+        if (m_debug_report_callback != VK_NULL_HANDLE && m_vkDestroyDebugReportCallbackEXT)
+            m_vkDestroyDebugReportCallbackEXT(m_instance, m_debug_report_callback, nullptr);
+    }
 
     bool RHI::initInstance()
     {
@@ -101,12 +105,22 @@ namespace Nano
 
     bool RHI::initDebugger()
     {
+        m_vkCreateDebugReportCallbackEXT = reinterpret_cast<PFN_vkCreateDebugReportCallbackEXT>(
+            vkGetInstanceProcAddr(m_instance, "vkCreateDebugReportCallbackEXT"));
+        m_vkDestroyDebugReportCallbackEXT = reinterpret_cast<PFN_vkDestroyDebugReportCallbackEXT>(
+            vkGetInstanceProcAddr(m_instance, "vkDestroyDebugReportCallbackEXT"));
+        if (!m_vkCreateDebugReportCallbackEXT)
+        {
+            WARN("vkCreateDebugReportCallbackEXT is not available.");
+            return false;
+        }
+
         VkDebugReportCallbackCreateInfoEXT vkDebugReportCallbackCreateInfo = {};
         vkDebugReportCallbackCreateInfo.sType       = VK_STRUCTURE_TYPE_DEBUG_REPORT_CALLBACK_CREATE_INFO_EXT;
         vkDebugReportCallbackCreateInfo.flags       = VK_DEBUG_REPORT_ERROR_BIT_EXT | VK_DEBUG_REPORT_WARNING_BIT_EXT;
         vkDebugReportCallbackCreateInfo.pfnCallback = debugCallback;
 
-        if (vkCreateDebugReportCallbackEXT(
+        if (m_vkCreateDebugReportCallbackEXT(
                 m_instance, &vkDebugReportCallbackCreateInfo, nullptr, &m_debug_report_callback) != VK_SUCCESS)
         {
             WARN("Failed to create debug report callback.");
@@ -118,7 +132,7 @@ namespace Nano
 
     bool RHI::initSurface()
     {
-        if (glfwCreateWindowSurface(m_instance, g_window.getGLFWWindow(), nullptr, &m_surface) != VK_SUCCESS)
+        if (glfwCreateWindowSurface(m_instance, Window::instance().getGLFWWindow(), nullptr, &m_surface) != VK_SUCCESS)
         {
             ERROR("Failed to create window surface.");
             return false;
@@ -212,6 +226,4 @@ namespace Nano
     }
 
     bool RHI::initDevice() { return true; }
-
-    RHI g_rhi;
 } // namespace Nano

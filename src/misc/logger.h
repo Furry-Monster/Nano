@@ -19,13 +19,11 @@ namespace Nano
             fatal,
         };
 
-        Logger();
-        ~Logger() noexcept;
-
-        Logger(const Logger& that) noexcept            = delete;
-        Logger& operator=(const Logger& that) noexcept = delete;
-        Logger(Logger&& that) noexcept                 = default;
-        Logger& operator=(Logger&& that) noexcept      = default;
+        static Logger& instance()
+        {
+            static Logger s_logger;
+            return s_logger;
+        }
 
         template<typename... TARGS>
         void log(const LogLevel& level, TARGS&&... args) const
@@ -52,13 +50,21 @@ namespace Nano
             }
         }
 
+    protected:
+        Logger();
+        ~Logger() noexcept;
+
+        Logger(const Logger& that) noexcept            = delete;
+        Logger& operator=(const Logger& that) noexcept = delete;
+        Logger(Logger&& that) noexcept                 = default;
+        Logger& operator=(Logger&& that) noexcept      = default;
+
     private:
         std::shared_ptr<spdlog::logger> m_spd_logger;
     };
 
-    extern Logger g_logger;
-
-#define LOG_HELPER(LOG_LEVEL, ...) Nano::g_logger.log(LOG_LEVEL, "[" + std::string(__FUNCTION__) + "] " + __VA_ARGS__)
+#define LOG_HELPER(LOG_LEVEL, ...) \
+    Nano::Logger::instance().log(LOG_LEVEL, "[" + std::string(__FUNCTION__) + "] " + __VA_ARGS__)
 #define DEBUG(...) LOG_HELPER(Nano::Logger::LogLevel::debug, __VA_ARGS__)
 #define INFO(...) LOG_HELPER(Nano::Logger::LogLevel::info, __VA_ARGS__)
 #define WARN(...) LOG_HELPER(Nano::Logger::LogLevel::warn, __VA_ARGS__)
