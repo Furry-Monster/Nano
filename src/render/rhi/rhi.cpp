@@ -88,6 +88,8 @@ namespace Nano
                 std::strncpy(m_prefered_layers[prefered_layer_index++], layer_properties[i].layerName, 63);
             }
         }
+        delete[] layer_properties;
+
         m_prefered_layer_cnt = prefered_layer_index;
 #ifdef DEBUG
         vkInstanceCreateInfo.enabledLayerCount   = m_prefered_layer_cnt;
@@ -147,10 +149,11 @@ namespace Nano
         VkPhysicalDevice* devices = new VkPhysicalDevice[device_cnt];
         vkEnumeratePhysicalDevices(m_instance, &device_cnt, devices);
 
-        int graphic_queue_family_index = -1;
-        int present_queue_family_index = -1;
         for (uint32_t i = 0; i < device_cnt; ++i)
         {
+            int graphic_queue_family_index = -1;
+            int present_queue_family_index = -1;
+
             // log each GPU info
             VkPhysicalDevice           curr_device = devices[i];
             VkPhysicalDeviceProperties curr_device_props {};
@@ -211,16 +214,21 @@ namespace Nano
                 if (support_present && device_queue_family_props[j].queueCount > 0)
                     present_queue_family_index = j;
 
-                if (graphic_queue_family_index == -1 && present_queue_family_index != -1)
+                if (graphic_queue_family_index != -1 && present_queue_family_index != -1)
                 {
                     m_physical_device            = curr_device;
                     m_graphic_queue_family_index = static_cast<uint32_t>(graphic_queue_family_index);
                     m_present_queue_family_index = static_cast<uint32_t>(present_queue_family_index);
+                    delete[] device_queue_family_props;
+                    delete[] devices;
                     return true;
                 }
+
+                delete[] device_queue_family_props;
             }
         }
 
+        delete[] devices;
         ERROR("No avaliable device detected.");
         return false;
     }
