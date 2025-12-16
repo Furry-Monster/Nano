@@ -22,10 +22,10 @@ namespace Nano
         Logger();
         ~Logger() noexcept;
 
-        Logger(const Logger& that)                = delete;
-        Logger& operator=(const Logger& that)     = delete;
-        Logger(Logger&& that) noexcept            = default;
-        Logger& operator=(Logger&& that) noexcept = default;
+        Logger(const Logger& that) noexcept            = delete;
+        Logger& operator=(const Logger& that) noexcept = delete;
+        Logger(Logger&& that) noexcept                 = default;
+        Logger& operator=(Logger&& that) noexcept      = default;
 
         template<typename... TARGS>
         void log(const LogLevel& level, TARGS&&... args) const

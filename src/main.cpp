@@ -8,6 +8,7 @@ int main(int argc, char** argv)
 {
     while (Nano::g_window.shouldClose())
     {
+        Nano::g_window.pollEvents();
     }
 
     return EXIT_SUCCESS;

@@ -25,10 +25,10 @@ namespace Nano
         Window();
         ~Window() noexcept;
 
-        Window(const Window& other)            = delete;
-        Window& operator=(const Window& other) = delete;
-        Window(Window&& other)                 = delete;
-        Window& operator=(Window&& other)      = delete;
+        Window(const Window& other)                = delete;
+        Window& operator=(const Window& other)     = delete;
+        Window(Window&& other) noexcept            = delete;
+        Window& operator=(Window&& other) noexcept = delete;
 
         bool shouldClose();
         void pollEvents();
