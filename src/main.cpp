@@ -1,15 +1,10 @@
-#include "render/window.h"
-
-#define GLFW_INCLUDE_NONE
-#include <GLFW/glfw3.h>
 #include <cstdlib>
+#include "engine.h"
 
 int main(int argc, char** argv)
 {
-    while (Nano::g_window.shouldClose())
-    {
-        Nano::g_window.pollEvents();
-    }
+    Nano::Engine engine;
+    engine.run();
 
     return EXIT_SUCCESS;
 }

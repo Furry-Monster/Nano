@@ -2,6 +2,7 @@
 #include <chrono>
 #include <exception>
 #include "misc/logger.h"
+#include "render/window.h"
 
 namespace Nano
 {
@@ -16,13 +17,10 @@ namespace Nano
         try
         {
             init();
-
-            m_is_running = true;
             loop();
         }
         catch (const std::exception& e)
         {
-            clean();
             ERROR("Engine error: " + e.what());
         }
 
@@ -31,9 +29,10 @@ namespace Nano
 
     void Engine::loop()
     {
-        m_curr_time = Clock::now();
+        m_curr_time  = Clock::now();
+        m_is_running = true;
 
-        while (m_is_running)
+        while (!g_window.shouldClose())
         {
             // time calc and clamp
             TimePoint                     now_time   = Clock::now();
@@ -56,18 +55,38 @@ namespace Nano
             double interpolated = m_accumulator / MS_PER_UPDATE;
             render(static_cast<float>(interpolated));
         }
+
+        m_is_running = false;
     }
 
     void Engine::init()
     {
         if (m_is_running)
             return;
+
+        if (!g_window.getGLFWWindow())
+        {
+            ERROR("Window is not initialized. Please ensure Window is created before Engine::init()");
+            throw std::runtime_error("Window initialization failed");
+        }
     }
 
-    void Engine::update(double deltaTime) {}
+    void Engine::update(double deltaTime)
+    {
+        g_window.pollEvents();
 
-    void Engine::render(float interpolation) {}
+        // TODO: other system updates;
+    }
 
-    void Engine::clean() {}
+    void Engine::render(float interpolation)
+    {
+        // TODO: draw call here.
+    }
+
+    void Engine::clean()
+    {
+        m_is_running  = false;
+        m_accumulator = std::chrono::duration<double>::zero();
+    }
 
 } // namespace Nano

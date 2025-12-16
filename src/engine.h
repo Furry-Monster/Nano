@@ -2,6 +2,7 @@
 #define ENGINE_H
 
 #include <chrono>
+
 namespace Nano
 {
     class Engine
@@ -37,7 +38,7 @@ namespace Nano
         TimePoint                     m_curr_time;
         std::chrono::duration<double> m_accumulator {std::chrono::duration<double>::zero()};
 
-        bool m_is_running {true};
+        bool m_is_running {false};
     };
 } // namespace Nano
 
