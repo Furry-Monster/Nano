@@ -1,6 +1,7 @@
 #include "rhi.h"
 #include <vulkan/vk_platform.h>
 #include <vulkan/vulkan_core.h>
+#include <cstdint>
 #include <cstdio>
 #include <cstring>
 #include "GLFW/glfw3.h"
@@ -129,53 +130,88 @@ namespace Nano
     {
         uint32_t device_cnt = 0;
         vkEnumeratePhysicalDevices(m_instance, &device_cnt, nullptr);
-        VkPhysicalDevice* all_vk_gpus = new VkPhysicalDevice[device_cnt];
-        vkEnumeratePhysicalDevices(m_instance, &device_cnt, all_vk_gpus);
+        VkPhysicalDevice* devices = new VkPhysicalDevice[device_cnt];
+        vkEnumeratePhysicalDevices(m_instance, &device_cnt, devices);
 
         int graphic_queue_family_index = -1;
         int present_queue_family_index = -1;
         for (uint32_t i = 0; i < device_cnt; ++i)
         {
-            VkPhysicalDevice           device = all_vk_gpus[i];
-            VkPhysicalDeviceProperties device_props {};
-            vkGetPhysicalDeviceProperties(device, &device_props);
-            DEBUG("Detected GPU :\n");
-            DEBUG("\tName: %s\n", device_props.deviceName);
-            switch (device_props.deviceType)
+            // log each GPU info
+            VkPhysicalDevice           curr_device = devices[i];
+            VkPhysicalDeviceProperties curr_device_props {};
+            vkGetPhysicalDeviceProperties(curr_device, &curr_device_props);
+
+            DEBUG("GPU %u:", i);
+            DEBUG("  Name : %s", curr_device_props.deviceName);
+
+            const char* device_type_str = "Unknown";
+            switch (curr_device_props.deviceType)
             {
                 case VK_PHYSICAL_DEVICE_TYPE_OTHER:
-                    DEBUG("\tType: Unknown type\n");
+                    device_type_str = "Other";
                     break;
                 case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU:
-                    DEBUG("\tType: Integrated GPU\n");
+                    device_type_str = "Integrated GPU";
                     break;
                 case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU:
-                    DEBUG("\tType: Discrete GPU (Recommanded)\n");
+                    device_type_str = "Discrete GPU (Recommended)";
                     break;
                 case VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU:
-                    DEBUG("\tType: Virtual GPU\n");
+                    device_type_str = "Virtual GPU";
                     break;
                 case VK_PHYSICAL_DEVICE_TYPE_CPU:
-                    DEBUG("\tType: CPU\n");
+                    device_type_str = "CPU";
                     break;
-                case VK_PHYSICAL_DEVICE_TYPE_MAX_ENUM:
+                default:
                     break;
             }
+            DEBUG("  Type : %s", device_type_str);
+            DEBUG("  API Version : %u.%u.%u",
+                  VK_VERSION_MAJOR(curr_device_props.apiVersion),
+                  VK_VERSION_MINOR(curr_device_props.apiVersion),
+                  VK_VERSION_PATCH(curr_device_props.apiVersion));
+            DEBUG("  Driver Version : %u.%u.%u",
+                  VK_VERSION_MAJOR(curr_device_props.driverVersion),
+                  VK_VERSION_MINOR(curr_device_props.driverVersion),
+                  VK_VERSION_PATCH(curr_device_props.driverVersion));
+            DEBUG("  Vendor ID : 0x%04X", curr_device_props.vendorID);
+            DEBUG("  Device ID : 0x%04X", curr_device_props.deviceID);
 
-            uint32_t queue_family_prop_cnt = 0;
-            vkGetPhysicalDeviceQueueFamilyProperties(device, &queue_family_prop_cnt, nullptr);
-            VkQueueFamilyProperties* queue_family_props = new VkQueueFamilyProperties[queue_family_prop_cnt];
-            vkGetPhysicalDeviceQueueFamilyProperties(device, &queue_family_prop_cnt, queue_family_props);
+            // find queues we need
+            uint32_t device_queue_family_prop_cnt = 0;
+            vkGetPhysicalDeviceQueueFamilyProperties(curr_device, &device_queue_family_prop_cnt, nullptr);
+            VkQueueFamilyProperties* device_queue_family_props =
+                new VkQueueFamilyProperties[device_queue_family_prop_cnt];
+            vkGetPhysicalDeviceQueueFamilyProperties(
+                curr_device, &device_queue_family_prop_cnt, device_queue_family_props);
 
-            for (uint32_t j = 0; j < queue_family_prop_cnt; ++j)
+            for (uint32_t j = 0; j < device_queue_family_prop_cnt; ++j)
             {
+                if (device_queue_family_props[j].queueCount > 0 &&
+                    device_queue_family_props[j].queueFlags & VK_QUEUE_GRAPHICS_BIT)
+                    graphic_queue_family_index = j;
+
+                VkBool32 support_present = false;
+                vkGetPhysicalDeviceSurfaceSupportKHR(curr_device, j, m_surface, &support_present);
+                if (support_present && device_queue_family_props[j].queueCount > 0)
+                    present_queue_family_index = j;
+
+                if (graphic_queue_family_index == -1 && present_queue_family_index != -1)
+                {
+                    m_physical_device            = curr_device;
+                    m_graphic_queue_family_index = static_cast<uint32_t>(graphic_queue_family_index);
+                    m_present_queue_family_index = static_cast<uint32_t>(present_queue_family_index);
+                    return true;
+                }
             }
         }
 
+        ERROR("No avaliable device detected.");
         return false;
     }
 
-    bool RHI::initDevice() {}
+    bool RHI::initDevice() { return true; }
 
     RHI g_rhi;
 } // namespace Nano

@@ -34,6 +34,8 @@ namespace Nano
         VkSurfaceKHR     m_surface {VK_NULL_HANDLE};
         VkDevice         m_device {VK_NULL_HANDLE};
         VkPhysicalDevice m_physical_device {VK_NULL_HANDLE};
+        uint32_t         m_graphic_queue_family_index {0};
+        uint32_t         m_present_queue_family_index {0};
         VkQueue          m_graphic_queue {VK_NULL_HANDLE};
         VkQueue          m_present_queue {VK_NULL_HANDLE};
 

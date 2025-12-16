@@ -10,7 +10,7 @@ namespace Nano
     {
         if (m_is_running)
         {
-            WARN("Engine is already running now...")
+            WARN("Engine is already running now...");
             return;
         }
 
