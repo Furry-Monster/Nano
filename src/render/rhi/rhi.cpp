@@ -38,7 +38,7 @@ namespace Nano
         if (initPhysicalDevice() == false)
             FATAL("Failed when init vulkan physical device");
 
-        if (initDevice() == false)
+        if (initLogicalDevice() == false)
             FATAL("Failed when init vulkan logical device");
     }
 
@@ -50,8 +50,8 @@ namespace Nano
 
     bool RHI::initInstance()
     {
-        m_enabled_exts = glfwGetRequiredInstanceExtensions(&m_enabled_ext_cnt);
-        if (!m_enabled_exts)
+        m_enabled_instance_exts = glfwGetRequiredInstanceExtensions(&m_enabled_instance_ext_cnt);
+        if (!m_enabled_instance_exts)
         {
             ERROR("Failed to get GLFW required instance extensions");
             return false;
@@ -68,8 +68,8 @@ namespace Nano
         VkInstanceCreateInfo vkInstanceCreateInfo    = {};
         vkInstanceCreateInfo.sType                   = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
         vkInstanceCreateInfo.pApplicationInfo        = &vkApplicationInfo;
-        vkInstanceCreateInfo.enabledExtensionCount   = m_enabled_ext_cnt;
-        vkInstanceCreateInfo.ppEnabledExtensionNames = m_enabled_exts;
+        vkInstanceCreateInfo.enabledExtensionCount   = m_enabled_instance_ext_cnt;
+        vkInstanceCreateInfo.ppEnabledExtensionNames = m_enabled_instance_exts;
 
         uint32_t layer_cnt;
         vkEnumerateInstanceLayerProperties(&layer_cnt, nullptr);
@@ -233,5 +233,79 @@ namespace Nano
         return false;
     }
 
-    bool RHI::initDevice() { return true; }
+    bool RHI::initLogicalDevice()
+    {
+        VkDeviceQueueCreateInfo vkDeviceQueueCreateInfos[2];
+        float                   p                     = 1.0f;
+        int                     queue_create_info_cnt = 2;
+        if (m_graphic_queue_family_index == m_present_queue_family_index)
+        {
+            vkDeviceQueueCreateInfos[0]                  = {};
+            vkDeviceQueueCreateInfos[0].sType            = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+            vkDeviceQueueCreateInfos[0].queueFamilyIndex = m_graphic_queue_family_index;
+            vkDeviceQueueCreateInfos[0].queueCount       = 1;
+            vkDeviceQueueCreateInfos[0].pQueuePriorities = &p;
+            queue_create_info_cnt                        = 1;
+        }
+        else
+        {
+            vkDeviceQueueCreateInfos[0]                  = {};
+            vkDeviceQueueCreateInfos[0].sType            = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+            vkDeviceQueueCreateInfos[0].queueFamilyIndex = m_graphic_queue_family_index;
+            vkDeviceQueueCreateInfos[0].queueCount       = 1;
+            vkDeviceQueueCreateInfos[0].pQueuePriorities = &p;
+            vkDeviceQueueCreateInfos[1]                  = {};
+            vkDeviceQueueCreateInfos[1].sType            = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+            vkDeviceQueueCreateInfos[1].queueFamilyIndex = m_present_queue_family_index;
+            vkDeviceQueueCreateInfos[1].queueCount       = 1;
+            vkDeviceQueueCreateInfos[1].pQueuePriorities = &p;
+            queue_create_info_cnt                        = 2;
+        }
+
+        VkDeviceCreateInfo vkDeviceCreateInfo   = {};
+        vkDeviceCreateInfo.sType                = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+        vkDeviceCreateInfo.queueCreateInfoCount = queue_create_info_cnt;
+        vkDeviceCreateInfo.pQueueCreateInfos    = vkDeviceQueueCreateInfos;
+
+#ifdef DEBUG
+        vkDeviceCreateInfo.enabledLayerCount   = m_prefered_layer_cnt;
+        vkDeviceCreateInfo.ppEnabledLayerNames = m_prefered_layers;
+#endif // DEBUG
+
+        m_enabled_device_ext_cnt                   = 1;
+        const char* device_exts[]                  = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
+        m_enabled_device_exts                      = device_exts;
+        vkDeviceCreateInfo.enabledExtensionCount   = m_enabled_device_ext_cnt;
+        vkDeviceCreateInfo.ppEnabledExtensionNames = m_enabled_device_exts;
+
+        VkPhysicalDeviceFeatures2 features2 = {};
+        features2.sType                     = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+        VkPhysicalDeviceShaderAtomicInt64Features shader_atomic_i64_features = {};
+        shader_atomic_i64_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_INT64_FEATURES;
+        features2.pNext                  = &shader_atomic_i64_features;
+        vkGetPhysicalDeviceFeatures2(m_physical_device, &features2);
+
+        bool support_shader_i64 = features2.features.shaderInt64;
+        if (!support_shader_i64)
+        {
+            ERROR("Device not support int64 type in shader.");
+            return false;
+        }
+        bool support_buffer_i64_atomics = shader_atomic_i64_features.shaderBufferInt64Atomics;
+        if (!support_buffer_i64_atomics)
+        {
+            ERROR("Device not support int64 atomic type in buffer.");
+            return false;
+        }
+
+        if (vkCreateDevice(m_physical_device, &vkDeviceCreateInfo, nullptr, &m_device) != VK_SUCCESS)
+        {
+            return false;
+        }
+
+        vkGetDeviceQueue(m_device, m_graphic_queue_family_index, 0, &m_graphic_queue);
+        vkGetDeviceQueue(m_device, m_present_queue_family_index, 0, &m_present_queue);
+
+        return true;
+    }
 } // namespace Nano
