@@ -26,7 +26,13 @@ namespace Nano
         const char** m_enabled_instance_exts {nullptr};
         uint32_t     m_prefered_layer_cnt {0};
         char**       m_prefered_layers {nullptr};
-        VkSurfaceKHR m_surface {VK_NULL_HANDLE};
+
+        VkSurfaceKHR             m_surface {VK_NULL_HANDLE};
+        VkSurfaceCapabilitiesKHR m_surface_capabilities {};
+        uint32_t                 m_surface_format_cnt {0};
+        VkSurfaceFormatKHR*      m_surface_formats {VK_NULL_HANDLE};
+        uint32_t                 m_surface_present_mode_cnt {0};
+        VkPresentModeKHR*        m_surface_present_modes {VK_NULL_HANDLE};
 
         VkDebugReportCallbackEXT            m_debug_report_callback {VK_NULL_HANDLE};
         PFN_vkCreateDebugReportCallbackEXT  m_vkCreateDebugReportCallbackEXT {VK_NULL_HANDLE};
@@ -35,11 +41,13 @@ namespace Nano
         VkDevice         m_device {VK_NULL_HANDLE};
         VkPhysicalDevice m_physical_device {VK_NULL_HANDLE};
         uint32_t         m_enabled_device_ext_cnt {0};
-        const char**     m_enabled_device_exts {VK_NULL_HANDLE};
+        const char**     m_enabled_device_exts {nullptr};
         uint32_t         m_graphic_queue_family_index {0};
         uint32_t         m_present_queue_family_index {0};
         VkQueue          m_graphic_queue {VK_NULL_HANDLE};
         VkQueue          m_present_queue {VK_NULL_HANDLE};
+
+        VkSwapchainKHR m_swapchain {VK_NULL_HANDLE};
 
     protected:
         RHI();
@@ -56,6 +64,8 @@ namespace Nano
         bool initSurface();
         bool initPhysicalDevice();
         bool initLogicalDevice();
+        bool initSurfaceProperties();
+        bool initSwapchain();
     };
 
 } // namespace Nano

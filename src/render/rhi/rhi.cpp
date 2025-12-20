@@ -40,6 +40,9 @@ namespace Nano
 
         if (initLogicalDevice() == false)
             FATAL("Failed when init vulkan logical device");
+
+        if (initSurfaceProperties() == false)
+            FATAL("Failed when init vulkan surface properties");
     }
 
     RHI::~RHI() noexcept
@@ -305,6 +308,71 @@ namespace Nano
 
         vkGetDeviceQueue(m_device, m_graphic_queue_family_index, 0, &m_graphic_queue);
         vkGetDeviceQueue(m_device, m_present_queue_family_index, 0, &m_present_queue);
+
+        return true;
+    }
+
+    bool RHI::initSurfaceProperties()
+    {
+        vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_physical_device, m_surface, &m_surface_capabilities);
+
+        vkGetPhysicalDeviceSurfaceFormatsKHR(m_physical_device, m_surface, &m_surface_format_cnt, nullptr);
+        m_surface_formats = new VkSurfaceFormatKHR[m_surface_format_cnt];
+        vkGetPhysicalDeviceSurfaceFormatsKHR(m_physical_device, m_surface, &m_surface_format_cnt, m_surface_formats);
+
+        vkGetPhysicalDeviceSurfacePresentModesKHR(m_physical_device, m_surface, &m_surface_present_mode_cnt, nullptr);
+        m_surface_present_modes = new VkPresentModeKHR[m_surface_present_mode_cnt];
+        vkGetPhysicalDeviceSurfacePresentModesKHR(
+            m_physical_device, m_surface, &m_surface_present_mode_cnt, m_surface_present_modes);
+
+        return true;
+    }
+
+    bool RHI::initSwapchain()
+    {
+        uint32_t selected_surface_format_index = 0;
+        for (uint32_t i = 0; i < m_surface_format_cnt; ++i)
+        {
+            if (m_surface_formats[i].format == VK_FORMAT_B8G8R8A8_UNORM &&
+                m_surface_formats[i].colorSpace == VK_COLORSPACE_SRGB_NONLINEAR_KHR)
+            {
+                selected_surface_format_index = i;
+                break;
+            }
+        }
+
+        VkSwapchainCreateInfoKHR vkSwapchainCreateInfo = {};
+        vkSwapchainCreateInfo.sType                    = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+        vkSwapchainCreateInfo.compositeAlpha           = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+        vkSwapchainCreateInfo.imageArrayLayers         = 1;
+        vkSwapchainCreateInfo.imageColorSpace          = m_surface_formats[selected_surface_format_index].colorSpace;
+        vkSwapchainCreateInfo.imageFormat              = m_surface_formats[selected_surface_format_index].format;
+        vkSwapchainCreateInfo.imageExtent.width        = 1280u;
+        vkSwapchainCreateInfo.imageExtent.height       = 720u;
+        vkSwapchainCreateInfo.imageSharingMode         = VK_SHARING_MODE_EXCLUSIVE;
+        vkSwapchainCreateInfo.imageUsage               = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+        vkSwapchainCreateInfo.minImageCount            = 2;
+
+        uint32_t queue_family_indices[2] = {0};
+        uint32_t queue_family_index_cnt  = 2;
+        if (m_graphic_queue_family_index == m_present_queue_family_index)
+        {
+            queue_family_indices[0] = m_graphic_queue_family_index;
+            queue_family_index_cnt  = 1;
+        }
+        else
+        {
+            queue_family_indices[0] = m_graphic_queue_family_index;
+            queue_family_indices[1] = m_present_queue_family_index;
+            queue_family_index_cnt  = 2;
+        }
+
+        vkSwapchainCreateInfo.pQueueFamilyIndices   = queue_family_indices;
+        vkSwapchainCreateInfo.queueFamilyIndexCount = queue_family_index_cnt;
+        vkSwapchainCreateInfo.presentMode           = VK_PRESENT_MODE_FIFO_KHR;
+        vkSwapchainCreateInfo.preTransform          = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
+        vkSwapchainCreateInfo.surface               = m_surface;
+        vkCreateSwapchainKHR(m_device, &vkSwapchainCreateInfo, nullptr, &m_swapchain);
 
         return true;
     }
