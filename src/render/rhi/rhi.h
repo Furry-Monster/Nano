@@ -15,8 +15,10 @@ namespace Nano
             return s_rhi;
         }
 
-        VkDevice getDevice() const;
-        VkQueue  getQueue() const;
+        VkDevice         getDevice() const { return m_device; }
+        VkPhysicalDevice getPhysicalDevice() const { return m_physical_device; }
+        VkQueue          getGraphicsQueue() const { return m_graphic_queue; }
+        VkQueue          getPresentQueue() const { return m_present_queue; }
 
         void createBuffer();
         void createTexture();

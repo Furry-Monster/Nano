@@ -4,7 +4,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
-#include "GLFW/glfw3.h"
+
 #include "misc/logger.h"
 #include "render/window.h"
 
