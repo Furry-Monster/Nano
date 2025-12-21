@@ -41,6 +41,18 @@ namespace Nano
                                 VkSamplerAddressMode address_mode_w = VK_SAMPLER_ADDRESS_MODE_REPEAT);
 
     private:
+        bool transitionImageLayout(VkCommandBuffer      command_buffer,
+                                   VkImageLayout        old_layout,
+                                   VkImageLayout        new_layout,
+                                   VkAccessFlags        src_access_mask,
+                                   VkAccessFlags        dst_access_mask,
+                                   VkPipelineStageFlags src_stage,
+                                   VkPipelineStageFlags dst_stage);
+        bool copyBufferToImage(VkCommandBuffer command_buffer, VkBuffer buffer, uint32_t width, uint32_t height);
+        bool uploadDataToImage(const void* data, size_t data_size, uint32_t width, uint32_t height);
+        bool allocateMemory(VkMemoryPropertyFlags memory_property_flags);
+        void cleanup();
+
         VkImage            m_image {VK_NULL_HANDLE};
         VkDeviceMemory     m_memory {VK_NULL_HANDLE};
         VkImageView        m_image_view {VK_NULL_HANDLE};
@@ -49,9 +61,6 @@ namespace Nano
         uint32_t           m_width {0};
         uint32_t           m_height {0};
         uint32_t           m_channel_count {0};
-
-        bool allocateMemory(VkMemoryPropertyFlags memory_property_flags);
-        void cleanup();
     };
 
 } // namespace Nano
