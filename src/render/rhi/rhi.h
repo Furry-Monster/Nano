@@ -29,9 +29,6 @@ namespace Nano
         uint32_t                        getSurfacePresentModeCount() const { return m_surface_present_mode_cnt; }
         const VkPresentModeKHR*         getSurfacePresentModes() const { return m_surface_present_modes; }
 
-        void createBuffer();
-        void createTexture();
-
     protected:
         RHI();
         ~RHI() noexcept;

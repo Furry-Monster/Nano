@@ -14,13 +14,148 @@ namespace Nano
     static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(VkDebugReportFlagsEXT      flags,
                                                         VkDebugReportObjectTypeEXT objectType,
                                                         uint64_t                   object,
-                                                        size_t                     location,
-                                                        int32_t                    messageCode,
-                                                        const char*                pLayerPrefix,
-                                                        const char*                pMessage,
-                                                        void*                      pUserData)
+                                                        size_t /* location */,
+                                                        int32_t     messageCode,
+                                                        const char* pLayerPrefix,
+                                                        const char* pMessage,
+                                                        void* /* pUserData */)
     {
-        DEBUG("vulkan debug report : %s", pMessage);
+        const char* ignored_messages[] = {
+            "Loader Message",
+            "Device Extension:",
+        };
+
+        for (const char* ignored : ignored_messages)
+        {
+            if (std::strstr(pMessage, ignored) != nullptr)
+            {
+                return VK_FALSE;
+            }
+        }
+
+        const char* object_type_name = "Unknown";
+        switch (objectType)
+        {
+            case VK_DEBUG_REPORT_OBJECT_TYPE_INSTANCE_EXT:
+                object_type_name = "Instance";
+                break;
+            case VK_DEBUG_REPORT_OBJECT_TYPE_PHYSICAL_DEVICE_EXT:
+                object_type_name = "PhysicalDevice";
+                break;
+            case VK_DEBUG_REPORT_OBJECT_TYPE_DEVICE_EXT:
+                object_type_name = "Device";
+                break;
+            case VK_DEBUG_REPORT_OBJECT_TYPE_QUEUE_EXT:
+                object_type_name = "Queue";
+                break;
+            case VK_DEBUG_REPORT_OBJECT_TYPE_SEMAPHORE_EXT:
+                object_type_name = "Semaphore";
+                break;
+            case VK_DEBUG_REPORT_OBJECT_TYPE_COMMAND_BUFFER_EXT:
+                object_type_name = "CommandBuffer";
+                break;
+            case VK_DEBUG_REPORT_OBJECT_TYPE_FENCE_EXT:
+                object_type_name = "Fence";
+                break;
+            case VK_DEBUG_REPORT_OBJECT_TYPE_DEVICE_MEMORY_EXT:
+                object_type_name = "DeviceMemory";
+                break;
+            case VK_DEBUG_REPORT_OBJECT_TYPE_BUFFER_EXT:
+                object_type_name = "Buffer";
+                break;
+            case VK_DEBUG_REPORT_OBJECT_TYPE_IMAGE_EXT:
+                object_type_name = "Image";
+                break;
+            case VK_DEBUG_REPORT_OBJECT_TYPE_EVENT_EXT:
+                object_type_name = "Event";
+                break;
+            case VK_DEBUG_REPORT_OBJECT_TYPE_QUERY_POOL_EXT:
+                object_type_name = "QueryPool";
+                break;
+            case VK_DEBUG_REPORT_OBJECT_TYPE_BUFFER_VIEW_EXT:
+                object_type_name = "BufferView";
+                break;
+            case VK_DEBUG_REPORT_OBJECT_TYPE_IMAGE_VIEW_EXT:
+                object_type_name = "ImageView";
+                break;
+            case VK_DEBUG_REPORT_OBJECT_TYPE_SHADER_MODULE_EXT:
+                object_type_name = "ShaderModule";
+                break;
+            case VK_DEBUG_REPORT_OBJECT_TYPE_PIPELINE_CACHE_EXT:
+                object_type_name = "PipelineCache";
+                break;
+            case VK_DEBUG_REPORT_OBJECT_TYPE_PIPELINE_LAYOUT_EXT:
+                object_type_name = "PipelineLayout";
+                break;
+            case VK_DEBUG_REPORT_OBJECT_TYPE_RENDER_PASS_EXT:
+                object_type_name = "RenderPass";
+                break;
+            case VK_DEBUG_REPORT_OBJECT_TYPE_PIPELINE_EXT:
+                object_type_name = "Pipeline";
+                break;
+            case VK_DEBUG_REPORT_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT_EXT:
+                object_type_name = "DescriptorSetLayout";
+                break;
+            case VK_DEBUG_REPORT_OBJECT_TYPE_SAMPLER_EXT:
+                object_type_name = "Sampler";
+                break;
+            case VK_DEBUG_REPORT_OBJECT_TYPE_DESCRIPTOR_POOL_EXT:
+                object_type_name = "DescriptorPool";
+                break;
+            case VK_DEBUG_REPORT_OBJECT_TYPE_DESCRIPTOR_SET_EXT:
+                object_type_name = "DescriptorSet";
+                break;
+            case VK_DEBUG_REPORT_OBJECT_TYPE_FRAMEBUFFER_EXT:
+                object_type_name = "Framebuffer";
+                break;
+            case VK_DEBUG_REPORT_OBJECT_TYPE_COMMAND_POOL_EXT:
+                object_type_name = "CommandPool";
+                break;
+            case VK_DEBUG_REPORT_OBJECT_TYPE_SURFACE_KHR_EXT:
+                object_type_name = "SurfaceKHR";
+                break;
+            case VK_DEBUG_REPORT_OBJECT_TYPE_SWAPCHAIN_KHR_EXT:
+                object_type_name = "SwapchainKHR";
+                break;
+            default:
+                break;
+        }
+
+        if (flags & VK_DEBUG_REPORT_ERROR_BIT_EXT)
+        {
+            ERROR("Vulkan Error [%s] (%s 0x%llx, Code %d): %s",
+                  pLayerPrefix,
+                  object_type_name,
+                  static_cast<unsigned long long>(object),
+                  messageCode,
+                  pMessage);
+        }
+        else if (flags & VK_DEBUG_REPORT_WARNING_BIT_EXT)
+        {
+            WARN("Vulkan Warning [%s] (%s 0x%llx, Code %d): %s",
+                 pLayerPrefix,
+                 object_type_name,
+                 static_cast<unsigned long long>(object),
+                 messageCode,
+                 pMessage);
+        }
+        else if (flags & VK_DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT)
+        {
+            WARN("Vulkan Performance [%s] (%s 0x%llx): %s",
+                 pLayerPrefix,
+                 object_type_name,
+                 static_cast<unsigned long long>(object),
+                 pMessage);
+        }
+        else if (flags & VK_DEBUG_REPORT_INFORMATION_BIT_EXT)
+        {
+            DEBUG("Vulkan Info [%s] (%s): %s", pLayerPrefix, object_type_name, pMessage);
+        }
+        else if (flags & VK_DEBUG_REPORT_DEBUG_BIT_EXT)
+        {
+            DEBUG("Vulkan Debug [%s]: %s", pLayerPrefix, pMessage);
+        }
+
         return VK_FALSE;
     }
 
@@ -193,8 +328,9 @@ namespace Nano
         }
 
         VkDebugReportCallbackCreateInfoEXT vkDebugReportCallbackCreateInfo = {};
-        vkDebugReportCallbackCreateInfo.sType       = VK_STRUCTURE_TYPE_DEBUG_REPORT_CALLBACK_CREATE_INFO_EXT;
-        vkDebugReportCallbackCreateInfo.flags       = VK_DEBUG_REPORT_ERROR_BIT_EXT | VK_DEBUG_REPORT_WARNING_BIT_EXT;
+        vkDebugReportCallbackCreateInfo.sType = VK_STRUCTURE_TYPE_DEBUG_REPORT_CALLBACK_CREATE_INFO_EXT;
+        vkDebugReportCallbackCreateInfo.flags = VK_DEBUG_REPORT_ERROR_BIT_EXT | VK_DEBUG_REPORT_WARNING_BIT_EXT |
+                                                VK_DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT;
         vkDebugReportCallbackCreateInfo.pfnCallback = debugCallback;
 
         if (m_vkCreateDebugReportCallbackEXT(
@@ -298,13 +434,13 @@ namespace Nano
                     delete[] devices;
                     return true;
                 }
-
-                delete[] device_queue_family_props;
             }
+
+            delete[] device_queue_family_props;
         }
 
         delete[] devices;
-        ERROR("No avaliable device detected.");
+        ERROR("No available device detected.");
         return false;
     }
 
