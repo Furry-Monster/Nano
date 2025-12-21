@@ -17,11 +17,9 @@ namespace Nano
         Swapchain(Swapchain&&) noexcept            = delete;
         Swapchain& operator=(Swapchain&&) noexcept = delete;
 
-        bool create(uint32_t width, uint32_t height);
-
+        bool     create(uint32_t width, uint32_t height);
         uint32_t acquireNextImage(VkSemaphore image_available_semaphore = VK_NULL_HANDLE);
-
-        bool present(uint32_t image_index, VkSemaphore render_finished_semaphore = VK_NULL_HANDLE);
+        bool     present(uint32_t image_index, VkSemaphore render_finished_semaphore = VK_NULL_HANDLE);
 
         VkRenderPass   getRenderPass() const { return m_render_pass; }
         VkSwapchainKHR getSwapchain() const { return m_swapchain; }

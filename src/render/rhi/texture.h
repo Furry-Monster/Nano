@@ -24,11 +24,8 @@ namespace Nano
                     VkFormat              format,
                     VkImageUsageFlags     usage,
                     VkMemoryPropertyFlags memory_property_flags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
         bool createFromFile(const char* path);
-
         bool createImageView(VkImageAspectFlags aspect_flags = VK_IMAGE_ASPECT_NONE);
-
         bool uploadData(const void* data, size_t data_size, uint32_t width, uint32_t height);
 
         VkImageView getImageView() const { return m_image_view; }
