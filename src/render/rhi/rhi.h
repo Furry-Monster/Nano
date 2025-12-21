@@ -48,6 +48,9 @@ namespace Nano
         VkQueue          m_present_queue {VK_NULL_HANDLE};
 
         VkSwapchainKHR m_swapchain {VK_NULL_HANDLE};
+        uint32_t       m_swapchain_color_buf_cnt {0};
+        VkImage*       m_swapchain_color_bufs {VK_NULL_HANDLE};
+        VkImageView*   m_swapchain_color_buf_views {VK_NULL_HANDLE};
 
     protected:
         RHI();
@@ -66,6 +69,7 @@ namespace Nano
         bool initLogicalDevice();
         bool initSurfaceProperties();
         bool initSwapchain();
+        bool initSwapchainRenderTarget();
     };
 
 } // namespace Nano

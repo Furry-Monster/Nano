@@ -43,6 +43,12 @@ namespace Nano
 
         if (initSurfaceProperties() == false)
             FATAL("Failed when init vulkan surface properties");
+
+        if (initSwapchain() == false)
+            FATAL("Failed when init vulkan swapchain");
+
+        if (initSwapchainRenderTarget() == false)
+            FATAL("Failed when init vulkan swapchain render target.");
     }
 
     RHI::~RHI() noexcept
@@ -376,4 +382,20 @@ namespace Nano
 
         return true;
     }
+
+    bool RHI::initSwapchainRenderTarget()
+    {
+        vkGetSwapchainImagesKHR(m_device, m_swapchain, &m_swapchain_color_buf_cnt, nullptr);
+
+        m_swapchain_color_bufs = new VkImage[m_swapchain_color_buf_cnt];
+        vkGetSwapchainImagesKHR(m_device, m_swapchain, &m_swapchain_color_buf_cnt, m_swapchain_color_bufs);
+
+        m_swapchain_color_buf_views = new VkImageView[m_swapchain_color_buf_cnt];
+        for (uint32_t i = 0; i < m_swapchain_color_buf_cnt; ++i)
+        {
+        }
+
+        return true;
+    }
+
 } // namespace Nano
