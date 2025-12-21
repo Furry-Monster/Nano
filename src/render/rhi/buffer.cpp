@@ -74,31 +74,17 @@ namespace Nano
         VkMemoryRequirements mem_requirements;
         vkGetBufferMemoryRequirements(rhi.getDevice(), m_buffer, &mem_requirements);
 
-        VkMemoryAllocateInfo vkMemoryAllocInfo = {};
-        vkMemoryAllocInfo.sType                = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-        vkMemoryAllocInfo.allocationSize       = mem_requirements.size;
-        vkMemoryAllocInfo.memoryTypeIndex      = 0;
-
-        VkPhysicalDeviceMemoryProperties mem_properties;
-        vkGetPhysicalDeviceMemoryProperties(rhi.getPhysicalDevice(), &mem_properties);
-
-        bool found = false;
-        for (uint32_t i = 0; i < mem_properties.memoryTypeCount; i++)
-        {
-            if ((mem_requirements.memoryTypeBits & (1 << i)) &&
-                (mem_properties.memoryTypes[i].propertyFlags & memory_property_flags) == memory_property_flags)
-            {
-                vkMemoryAllocInfo.memoryTypeIndex = i;
-                found                             = true;
-                break;
-            }
-        }
-
-        if (!found)
+        uint32_t memory_type_index = 0;
+        if (!rhi.findMemoryType(mem_requirements.memoryTypeBits, memory_property_flags, memory_type_index))
         {
             ERROR("Failed to find suitable memory type for buffer.");
             return false;
         }
+
+        VkMemoryAllocateInfo vkMemoryAllocInfo = {};
+        vkMemoryAllocInfo.sType                = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+        vkMemoryAllocInfo.allocationSize       = mem_requirements.size;
+        vkMemoryAllocInfo.memoryTypeIndex      = memory_type_index;
 
         if (vkAllocateMemory(rhi.getDevice(), &vkMemoryAllocInfo, nullptr, &m_memory) != VK_SUCCESS)
         {

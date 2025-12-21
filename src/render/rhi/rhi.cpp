@@ -253,19 +253,30 @@ namespace Nano
 
             DEBUG("  Destroyed Vulkan instance");
         }
-
-        // Note: m_enabled_instance_exts is owned by GLFW, don't free it
-        // Note: m_enabled_device_exts points to a local array, don't free it
     }
 
     bool RHI::initInstance()
     {
-        m_enabled_instance_exts = glfwGetRequiredInstanceExtensions(&m_enabled_instance_ext_cnt);
-        if (!m_enabled_instance_exts)
+        // glfw exts
+        uint32_t     glfw_ext_count = 0;
+        const char** glfw_exts      = glfwGetRequiredInstanceExtensions(&glfw_ext_count);
+        if (!glfw_exts)
         {
             ERROR("Failed to get GLFW required instance extensions");
             return false;
         }
+
+        // additional exts
+        m_additional_instance_exts.clear();
+#ifdef DEBUG
+        m_additional_instance_exts.push_back(VK_EXT_DEBUG_REPORT_EXTENSION_NAME);
+#endif // DEBUG
+
+        std::vector<const char*> all_extensions;
+        for (uint32_t i = 0; i < glfw_ext_count; ++i)
+            all_extensions.push_back(glfw_exts[i]);
+        for (const char* ext : m_additional_instance_exts)
+            all_extensions.push_back(ext);
 
         VkApplicationInfo vkApplicationInfo  = {};
         vkApplicationInfo.sType              = VK_STRUCTURE_TYPE_APPLICATION_INFO;
@@ -278,8 +289,8 @@ namespace Nano
         VkInstanceCreateInfo vkInstanceCreateInfo    = {};
         vkInstanceCreateInfo.sType                   = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
         vkInstanceCreateInfo.pApplicationInfo        = &vkApplicationInfo;
-        vkInstanceCreateInfo.enabledExtensionCount   = m_enabled_instance_ext_cnt;
-        vkInstanceCreateInfo.ppEnabledExtensionNames = m_enabled_instance_exts;
+        vkInstanceCreateInfo.enabledExtensionCount   = static_cast<uint32_t>(all_extensions.size());
+        vkInstanceCreateInfo.ppEnabledExtensionNames = all_extensions.data();
 
         uint32_t layer_cnt;
         vkEnumerateInstanceLayerProperties(&layer_cnt, nullptr);
@@ -473,22 +484,6 @@ namespace Nano
             queue_create_info_cnt                        = 2;
         }
 
-        VkDeviceCreateInfo vkDeviceCreateInfo   = {};
-        vkDeviceCreateInfo.sType                = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-        vkDeviceCreateInfo.queueCreateInfoCount = queue_create_info_cnt;
-        vkDeviceCreateInfo.pQueueCreateInfos    = vkDeviceQueueCreateInfos;
-
-#ifdef DEBUG
-        vkDeviceCreateInfo.enabledLayerCount   = m_prefered_layer_cnt;
-        vkDeviceCreateInfo.ppEnabledLayerNames = m_prefered_layers;
-#endif // DEBUG
-
-        m_enabled_device_ext_cnt                   = 1;
-        const char* device_exts[]                  = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
-        m_enabled_device_exts                      = device_exts;
-        vkDeviceCreateInfo.enabledExtensionCount   = m_enabled_device_ext_cnt;
-        vkDeviceCreateInfo.ppEnabledExtensionNames = m_enabled_device_exts;
-
         VkPhysicalDeviceFeatures2 features2 = {};
         features2.sType                     = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
         VkPhysicalDeviceShaderAtomicInt64Features shader_atomic_i64_features = {};
@@ -508,6 +503,37 @@ namespace Nano
             ERROR("Device not support int64 atomic type in buffer.");
             return false;
         }
+
+        vkGetPhysicalDeviceMemoryProperties(m_physical_device, &m_memory_properties);
+
+        uint32_t extension_count = 0;
+        vkEnumerateDeviceExtensionProperties(m_physical_device, nullptr, &extension_count, nullptr);
+        m_device_extensions.resize(extension_count);
+        vkEnumerateDeviceExtensionProperties(m_physical_device, nullptr, &extension_count, m_device_extensions.data());
+
+        const char*    required_exts[]    = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
+        const uint32_t required_ext_count = sizeof(required_exts) / sizeof(required_exts[0]);
+        for (uint32_t i = 0; i < required_ext_count; ++i)
+        {
+            if (!isDeviceExtensionSupported(required_exts[i]))
+            {
+                ERROR("Device does not support required extension: %s", required_exts[i]);
+                return false;
+            }
+        }
+
+        VkDeviceCreateInfo vkDeviceCreateInfo   = {};
+        vkDeviceCreateInfo.sType                = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+        vkDeviceCreateInfo.queueCreateInfoCount = queue_create_info_cnt;
+        vkDeviceCreateInfo.pQueueCreateInfos    = vkDeviceQueueCreateInfos;
+
+#ifdef DEBUG
+        vkDeviceCreateInfo.enabledLayerCount   = m_prefered_layer_cnt;
+        vkDeviceCreateInfo.ppEnabledLayerNames = m_prefered_layers;
+#endif // DEBUG
+
+        vkDeviceCreateInfo.enabledExtensionCount   = required_ext_count;
+        vkDeviceCreateInfo.ppEnabledExtensionNames = required_exts;
 
         if (vkCreateDevice(m_physical_device, &vkDeviceCreateInfo, nullptr, &m_device) != VK_SUCCESS)
         {
@@ -534,6 +560,33 @@ namespace Nano
             m_physical_device, m_surface, &m_surface_present_mode_cnt, m_surface_present_modes);
 
         return true;
+    }
+
+    bool
+    RHI::findMemoryType(uint32_t type_filter, VkMemoryPropertyFlags property_flags, uint32_t& memory_type_index) const
+    {
+        for (uint32_t i = 0; i < m_memory_properties.memoryTypeCount; i++)
+        {
+            if ((type_filter & (1 << i)) &&
+                (m_memory_properties.memoryTypes[i].propertyFlags & property_flags) == property_flags)
+            {
+                memory_type_index = i;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    bool RHI::isDeviceExtensionSupported(const char* extension_name) const
+    {
+        for (const auto& ext : m_device_extensions)
+        {
+            if (std::strcmp(ext.extensionName, extension_name) == 0)
+            {
+                return true;
+            }
+        }
+        return false;
     }
 
 } // namespace Nano
