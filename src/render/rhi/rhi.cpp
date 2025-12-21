@@ -28,33 +28,99 @@ namespace Nano
     {
         if (initInstance() == false)
             FATAL("Failed when init vulkan instance.");
+        DEBUG("Successfully initialize vulkan instance.");
 
         if (initDebugger() == false)
             WARN("Failed when init vulkan debugger.");
+        DEBUG("Successfully initialize or ignore vulkan debugger.");
 
         if (initSurface() == false)
             FATAL("Failed when init vulkan surface");
+        DEBUG("Successfully initialize vulkan surface.");
 
         if (initPhysicalDevice() == false)
             FATAL("Failed when init vulkan physical device");
+        DEBUG("Successfully initialize vulkan physical device.");
 
         if (initLogicalDevice() == false)
             FATAL("Failed when init vulkan logical device");
+        DEBUG("Successfully initialize vulkan logical device.");
 
         if (initSurfaceProperties() == false)
             FATAL("Failed when init vulkan surface properties");
-
-        if (initSwapchain() == false)
-            FATAL("Failed when init vulkan swapchain");
-
-        if (initSwapchainRenderTarget() == false)
-            FATAL("Failed when init vulkan swapchain render target.");
+        DEBUG("Successfully initialize vulkan surface properties.");
     }
 
     RHI::~RHI() noexcept
     {
+        if (m_device != VK_NULL_HANDLE)
+        {
+            vkDeviceWaitIdle(m_device);
+            vkDestroyDevice(m_device, nullptr);
+            m_device = VK_NULL_HANDLE;
+
+            DEBUG("  Destroyed logical device");
+        }
+
+        if (m_surface != VK_NULL_HANDLE)
+        {
+            vkDestroySurfaceKHR(m_instance, m_surface, nullptr);
+            m_surface = VK_NULL_HANDLE;
+
+            DEBUG("  Destroyed surface");
+        }
+
         if (m_debug_report_callback != VK_NULL_HANDLE && m_vkDestroyDebugReportCallbackEXT)
+        {
             m_vkDestroyDebugReportCallbackEXT(m_instance, m_debug_report_callback, nullptr);
+            m_debug_report_callback = VK_NULL_HANDLE;
+
+            DEBUG("  Destroyed debug report callback");
+        }
+
+        if (m_surface_formats != nullptr)
+        {
+            delete[] m_surface_formats;
+            m_surface_formats = nullptr;
+
+            DEBUG("  Released surface formats array");
+        }
+
+        if (m_surface_present_modes != nullptr)
+        {
+            delete[] m_surface_present_modes;
+            m_surface_present_modes = nullptr;
+
+            DEBUG("  Released surface present modes array");
+        }
+
+        if (m_prefered_layers != nullptr)
+        {
+            for (uint32_t i = 0; i < m_prefered_layer_cnt; ++i)
+            {
+                if (m_prefered_layers[i] != nullptr)
+                {
+                    delete[] m_prefered_layers[i];
+                    m_prefered_layers[i] = nullptr;
+                }
+            }
+            delete[] m_prefered_layers;
+            m_prefered_layers = nullptr;
+
+            DEBUG("  Released %u preferred layers", m_prefered_layer_cnt);
+            m_prefered_layer_cnt = 0;
+        }
+
+        if (m_instance != VK_NULL_HANDLE)
+        {
+            vkDestroyInstance(m_instance, nullptr);
+            m_instance = VK_NULL_HANDLE;
+
+            DEBUG("  Destroyed Vulkan instance");
+        }
+
+        // Note: m_enabled_instance_exts is owned by GLFW, don't free it
+        // Note: m_enabled_device_exts points to a local array, don't free it
     }
 
     bool RHI::initInstance()
@@ -120,9 +186,9 @@ namespace Nano
             vkGetInstanceProcAddr(m_instance, "vkCreateDebugReportCallbackEXT"));
         m_vkDestroyDebugReportCallbackEXT = reinterpret_cast<PFN_vkDestroyDebugReportCallbackEXT>(
             vkGetInstanceProcAddr(m_instance, "vkDestroyDebugReportCallbackEXT"));
-        if (!m_vkCreateDebugReportCallbackEXT)
+        if (!m_vkCreateDebugReportCallbackEXT || !m_vkDestroyDebugReportCallbackEXT)
         {
-            WARN("vkCreateDebugReportCallbackEXT is not available.");
+            WARN("vkCreate(Destroy)DebugReportCallbackEXT is not available.");
             return false;
         }
 
@@ -330,70 +396,6 @@ namespace Nano
         m_surface_present_modes = new VkPresentModeKHR[m_surface_present_mode_cnt];
         vkGetPhysicalDeviceSurfacePresentModesKHR(
             m_physical_device, m_surface, &m_surface_present_mode_cnt, m_surface_present_modes);
-
-        return true;
-    }
-
-    bool RHI::initSwapchain()
-    {
-        uint32_t selected_surface_format_index = 0;
-        for (uint32_t i = 0; i < m_surface_format_cnt; ++i)
-        {
-            if (m_surface_formats[i].format == VK_FORMAT_B8G8R8A8_UNORM &&
-                m_surface_formats[i].colorSpace == VK_COLORSPACE_SRGB_NONLINEAR_KHR)
-            {
-                selected_surface_format_index = i;
-                break;
-            }
-        }
-
-        VkSwapchainCreateInfoKHR vkSwapchainCreateInfo = {};
-        vkSwapchainCreateInfo.sType                    = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-        vkSwapchainCreateInfo.compositeAlpha           = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-        vkSwapchainCreateInfo.imageArrayLayers         = 1;
-        vkSwapchainCreateInfo.imageColorSpace          = m_surface_formats[selected_surface_format_index].colorSpace;
-        vkSwapchainCreateInfo.imageFormat              = m_surface_formats[selected_surface_format_index].format;
-        vkSwapchainCreateInfo.imageExtent.width        = 1280u;
-        vkSwapchainCreateInfo.imageExtent.height       = 720u;
-        vkSwapchainCreateInfo.imageSharingMode         = VK_SHARING_MODE_EXCLUSIVE;
-        vkSwapchainCreateInfo.imageUsage               = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-        vkSwapchainCreateInfo.minImageCount            = 2;
-
-        uint32_t queue_family_indices[2] = {0};
-        uint32_t queue_family_index_cnt  = 2;
-        if (m_graphic_queue_family_index == m_present_queue_family_index)
-        {
-            queue_family_indices[0] = m_graphic_queue_family_index;
-            queue_family_index_cnt  = 1;
-        }
-        else
-        {
-            queue_family_indices[0] = m_graphic_queue_family_index;
-            queue_family_indices[1] = m_present_queue_family_index;
-            queue_family_index_cnt  = 2;
-        }
-
-        vkSwapchainCreateInfo.pQueueFamilyIndices   = queue_family_indices;
-        vkSwapchainCreateInfo.queueFamilyIndexCount = queue_family_index_cnt;
-        vkSwapchainCreateInfo.presentMode           = VK_PRESENT_MODE_FIFO_KHR;
-        vkSwapchainCreateInfo.preTransform          = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
-        vkSwapchainCreateInfo.surface               = m_surface;
-        vkCreateSwapchainKHR(m_device, &vkSwapchainCreateInfo, nullptr, &m_swapchain);
-
-        return true;
-    }
-
-    bool RHI::initSwapchainRenderTarget()
-    {
-        vkGetSwapchainImagesKHR(m_device, m_swapchain, &m_swapchain_color_buf_cnt, nullptr);
-
-        m_swapchain_color_bufs = new VkImage[m_swapchain_color_buf_cnt];
-        vkGetSwapchainImagesKHR(m_device, m_swapchain, &m_swapchain_color_buf_cnt, m_swapchain_color_bufs);
-
-        m_swapchain_color_buf_views = new VkImageView[m_swapchain_color_buf_cnt];
-        for (uint32_t i = 0; i < m_swapchain_color_buf_cnt; ++i)
-        {
-        }
 
         return true;
     }

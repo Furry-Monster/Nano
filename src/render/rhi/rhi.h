@@ -19,9 +19,35 @@ namespace Nano
         VkPhysicalDevice getPhysicalDevice() const { return m_physical_device; }
         VkQueue          getGraphicsQueue() const { return m_graphic_queue; }
         VkQueue          getPresentQueue() const { return m_present_queue; }
+        VkSurfaceKHR     getSurface() const { return m_surface; }
+        uint32_t         getGraphicsQueueFamilyIndex() const { return m_graphic_queue_family_index; }
+        uint32_t         getPresentQueueFamilyIndex() const { return m_present_queue_family_index; }
+
+        const VkSurfaceCapabilitiesKHR& getSurfaceCapabilities() const { return m_surface_capabilities; }
+        uint32_t                        getSurfaceFormatCount() const { return m_surface_format_cnt; }
+        const VkSurfaceFormatKHR*       getSurfaceFormats() const { return m_surface_formats; }
+        uint32_t                        getSurfacePresentModeCount() const { return m_surface_present_mode_cnt; }
+        const VkPresentModeKHR*         getSurfacePresentModes() const { return m_surface_present_modes; }
 
         void createBuffer();
         void createTexture();
+
+    protected:
+        RHI();
+        ~RHI() noexcept;
+
+        RHI(const RHI&)            = delete;
+        RHI& operator=(const RHI&) = delete;
+        RHI(RHI&&)                 = delete;
+        RHI& operator=(RHI&&)      = delete;
+
+    private:
+        bool initInstance();
+        bool initDebugger();
+        bool initSurface();
+        bool initPhysicalDevice();
+        bool initLogicalDevice();
+        bool initSurfaceProperties();
 
         VkInstance   m_instance {VK_NULL_HANDLE};
         uint32_t     m_enabled_instance_ext_cnt {0};
@@ -48,30 +74,6 @@ namespace Nano
         uint32_t         m_present_queue_family_index {0};
         VkQueue          m_graphic_queue {VK_NULL_HANDLE};
         VkQueue          m_present_queue {VK_NULL_HANDLE};
-
-        VkSwapchainKHR m_swapchain {VK_NULL_HANDLE};
-        uint32_t       m_swapchain_color_buf_cnt {0};
-        VkImage*       m_swapchain_color_bufs {VK_NULL_HANDLE};
-        VkImageView*   m_swapchain_color_buf_views {VK_NULL_HANDLE};
-
-    protected:
-        RHI();
-        ~RHI() noexcept;
-
-        RHI(const RHI&)            = delete;
-        RHI& operator=(const RHI&) = delete;
-        RHI(RHI&&)                 = delete;
-        RHI& operator=(RHI&&)      = delete;
-
-    private:
-        bool initInstance();
-        bool initDebugger();
-        bool initSurface();
-        bool initPhysicalDevice();
-        bool initLogicalDevice();
-        bool initSurfaceProperties();
-        bool initSwapchain();
-        bool initSwapchainRenderTarget();
     };
 
 } // namespace Nano
