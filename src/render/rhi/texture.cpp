@@ -394,7 +394,7 @@ namespace Nano
         if (!cmd.submit(rhi.getGraphicsQueue(),
                         VK_NULL_HANDLE,
                         VK_NULL_HANDLE,
-                        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                        VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
                         fence))
         {
             vkDestroyFence(rhi.getDevice(), fence, nullptr);
