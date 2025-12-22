@@ -1428,6 +1428,7 @@ void GlobalConstants::SetCameraPositionWS(float inX, float inY, float inZ, float
     mCameraPositionWS[2] = inZ;
     mCameraPositionWS[3] = inW;
 }
+
 void GlobalConstants::SetCameraViewDirectionWS(float inX, float inY, float inZ, float inW)
 {
     mViewDirectionWS[0] = inX;

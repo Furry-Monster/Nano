@@ -1,5 +1,6 @@
 #pragma once
 #include "vulkan_rhi.h"
+
 class Material
 {
 public:

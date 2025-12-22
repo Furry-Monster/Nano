@@ -12,6 +12,7 @@ SceneNode::SceneNode() : mScale(1.0f)
     mUBO                   = nullptr;
     mUBO1                  = nullptr;
 }
+
 void SceneNode::SetPosition(float inX, float inY, float inZ)
 {
     mPosition.x  = inX;
@@ -19,7 +20,9 @@ void SceneNode::SetPosition(float inX, float inY, float inZ)
     mPosition.z  = inZ;
     mbNeedUpdate = true;
 }
+
 void SceneNode::SetRotation(float inX, float inY, float inZ) {}
+
 void SceneNode::SetScale(float inX, float inY, float inZ)
 {
     mScale.x     = inX;

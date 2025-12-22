@@ -1,11 +1,14 @@
 #pragma once
+
 #include <string>
 #include "vulkan_rhi.h"
+
 enum class ERenderPassType
 {
     ERPT_GRAPHICS,
     ERPT_COMPUTE
 };
+
 class RenderPass
 {
 public:

@@ -23,6 +23,7 @@ static SceneNode*  sFSQNode;
 
 static int     sCurrentMipLevelIndex = 0;
 static int     sAvaliableMipLevels[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 10};
+
 unsigned char* LoadFileContent(const char* inFilePath, size_t& outFileSize)
 {
     FILE* file = fopen(inFilePath, "rb");
@@ -38,6 +39,7 @@ unsigned char* LoadFileContent(const char* inFilePath, size_t& outFileSize)
     fclose(file);
     return fileContent;
 }
+
 void InitScene(int inCanvasWidth, int inCanvasHeight)
 {
     StaticMesh::Init();

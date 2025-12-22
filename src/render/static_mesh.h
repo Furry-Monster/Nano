@@ -1,4 +1,5 @@
 #pragma once
+
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -20,6 +21,7 @@ struct SubMesh
     int           mIndexCount;
     Buffer*       mIBO;
 };
+
 class StaticMesh
 {
 public:

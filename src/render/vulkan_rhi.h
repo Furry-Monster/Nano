@@ -31,6 +31,7 @@ struct GlobalConstants
     void SetCameraPositionWS(float inX, float inY, float inZ, float inW = 0.0f);
     void SetCameraViewDirectionWS(float inX, float inY, float inZ, float inW = 0.0f);
 };
+
 struct Texture
 {
     VkImage            mImage;
@@ -47,6 +48,7 @@ struct Texture
         mImageAspectFlag = VK_IMAGE_ASPECT_NONE;
     }
 };
+
 struct Texture2D : public Texture
 {
     int mWidth, mHeight;
@@ -58,6 +60,7 @@ struct Texture2D : public Texture
         mChannelCount = 0;
     }
 };
+
 struct Buffer
 {
     VkBuffer       mBuffer;
@@ -66,11 +69,13 @@ struct Buffer
     Buffer();
     ~Buffer();
 };
+
 struct ShaderParameterDescription
 {
     VkDescriptorSetLayout mDescriptorSetLayout;
     VkPipelineLayout      mPipelineLayout;
 };
+
 bool             InitVulkan(void* inUserData, int inCanvasWidth, int inCanvasHeight);
 VkCommandBuffer  CreateCommandBuffer(VkCommandBufferLevel inCommandBufferLevel = VK_COMMAND_BUFFER_LEVEL_PRIMARY);
 void             BeginCommandBuffer(VkCommandBuffer inCommandBuffer, VkCommandBufferUsageFlagBits inUsage);
@@ -151,6 +156,7 @@ VkImageView    GenImageViewCubeMap(VkImage inImage, VkFormat inFormat, VkImageAs
 void           BeginEvent(VkCommandBuffer inCommandBuffer, const char* inName);
 void           EndEvent(VkCommandBuffer inCommandBuffer);
 void           SetObjectName(VkObjectType inType, void* inObject, const char* inName);
+
 struct ScopedEvent
 {
     VkCommandBuffer mCommandBuffer;
@@ -160,6 +166,7 @@ struct ScopedEvent
     }
     ~ScopedEvent() { EndEvent(mCommandBuffer); }
 };
+
 #define EVENT_VAR_INNER(CommandBuffer, inName, line) _scopedEvent_##line(CommandBuffer, inName)
 #define EventVar(CommandBuffer, inName, n) EVENT_VAR_INNER(CommandBuffer, inName, n)
 #define SCOPED_EVENT(CommandBuffer, inName) ScopedEvent EventVar(CommandBuffer, inName, __LINE__)
