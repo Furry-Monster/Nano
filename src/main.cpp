@@ -2,8 +2,8 @@
 #include <GLFW/glfw3.h>
 #include <stdio.h>
 #include <chrono>
-#include "render/BattleFireVulkan.h"
-#include "scene/Scene.h"
+#include "render/vulkan_rhi.h"
+#include "scene/scene.h"
 
 static void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods)
 {

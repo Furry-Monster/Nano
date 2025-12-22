@@ -3,8 +3,8 @@
 #include <unordered_map>
 #include <vector>
 #include "../math/float4.h"
-#include "BattleFireVulkan.h"
-#include "Material.h"
+#include "material.h"
+#include "vulkan_rhi.h"
 
 struct StaticMeshVertexData
 {
@@ -16,9 +16,9 @@ struct StaticMeshVertexData
 
 struct SubMesh
 {
-    unsigned int*     mIndexes;
-    int               mIndexCount;
-    BattleFireBuffer* mIBO;
+    unsigned int* mIndexes;
+    int           mIndexCount;
+    Buffer*       mIBO;
 };
 class StaticMesh
 {
@@ -29,7 +29,7 @@ public:
     Material                                              mMaterial;
     StaticMeshVertexData*                                 mVertexData;
     int                                                   mVertexCount;
-    BattleFireBuffer*                                     mVBO;
+    Buffer*                                               mVBO;
     std::unordered_map<std::string, SubMesh*>             mSubMeshes;
     void                                                  SetVertexCount(int inVertexCount);
     void SetPosition(int inIndex, float inX, float inY, float inZ, float inW = 1.0f);

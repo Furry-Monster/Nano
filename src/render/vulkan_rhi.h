@@ -3,10 +3,12 @@
 #include <GLFW/glfw3.h>
 #include <vulkan/vulkan.h>
 #include <vector>
+
 struct InitVulkanUserData
 {
     GLFWwindow* mWindow;
 };
+
 struct GlobalConstants
 {
     union
@@ -56,40 +58,40 @@ struct Texture2D : public Texture
         mChannelCount = 0;
     }
 };
-struct BattleFireBuffer
+struct Buffer
 {
     VkBuffer       mBuffer;
     VkDeviceMemory mMemory;
     int            mSize;
-    BattleFireBuffer();
-    ~BattleFireBuffer();
+    Buffer();
+    ~Buffer();
 };
-struct BattleFireShaderParameterDescription
+struct ShaderParameterDescription
 {
     VkDescriptorSetLayout mDescriptorSetLayout;
     VkPipelineLayout      mPipelineLayout;
 };
-bool              InitVulkan(void* inUserData, int inCanvasWidth, int inCanvasHeight);
-VkCommandBuffer   CreateCommandBuffer(VkCommandBufferLevel inCommandBufferLevel = VK_COMMAND_BUFFER_LEVEL_PRIMARY);
-void              BeginCommandBuffer(VkCommandBuffer inCommandBuffer, VkCommandBufferUsageFlagBits inUsage);
-uint32_t          BeginSwapChainRenderPass(VkCommandBuffer inCommandBuffer);
-void              EndSwapChainRenderPass(VkCommandBuffer inCommandBuffer);
-VkQueue           GetGraphicQueue();
-VkDevice          GetVulkanDevice();
-VkPhysicalDevice  GetPhysicalDevice();
-VkRenderPass      GetSwapChainRenderPass();
-BattleFireBuffer* GenBufferObject(VkBufferUsageFlags       inBufferUsageFlag,
-                                  VkMemoryPropertyFlagBits inMemoryPropertyFlagBits,
-                                  const void*              inData = nullptr,
-                                  int                      inLen  = 0);
-void              BufferSubData(BattleFireBuffer* buffer, const void* data, VkDeviceSize size);
-BattleFireShaderParameterDescription* GetUberPassShaderParameterDescription();
-VkPipeline                            CreatePSO(VkRenderPass                                          inRenderPass,
-                                                VkPrimitiveTopology                                   inPrimitiveType,
-                                                const std::vector<VkVertexInputBindingDescription>&   inVertexInputBindingDescriptions,
-                                                const std::vector<VkVertexInputAttributeDescription>& inVertexInputAttributeDescriptions,
-                                                const VkShaderModule                                  inVS,
-                                                const VkShaderModule                                  inFS);
+bool             InitVulkan(void* inUserData, int inCanvasWidth, int inCanvasHeight);
+VkCommandBuffer  CreateCommandBuffer(VkCommandBufferLevel inCommandBufferLevel = VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+void             BeginCommandBuffer(VkCommandBuffer inCommandBuffer, VkCommandBufferUsageFlagBits inUsage);
+uint32_t         BeginSwapChainRenderPass(VkCommandBuffer inCommandBuffer);
+void             EndSwapChainRenderPass(VkCommandBuffer inCommandBuffer);
+VkQueue          GetGraphicQueue();
+VkDevice         GetVulkanDevice();
+VkPhysicalDevice GetPhysicalDevice();
+VkRenderPass     GetSwapChainRenderPass();
+Buffer*          GenBufferObject(VkBufferUsageFlags       inBufferUsageFlag,
+                                 VkMemoryPropertyFlagBits inMemoryPropertyFlagBits,
+                                 const void*              inData = nullptr,
+                                 int                      inLen  = 0);
+void             BufferSubData(Buffer* buffer, const void* data, VkDeviceSize size);
+ShaderParameterDescription* GetUberPassShaderParameterDescription();
+VkPipeline                  CreatePSO(VkRenderPass                                          inRenderPass,
+                                      VkPrimitiveTopology                                   inPrimitiveType,
+                                      const std::vector<VkVertexInputBindingDescription>&   inVertexInputBindingDescriptions,
+                                      const std::vector<VkVertexInputAttributeDescription>& inVertexInputAttributeDescriptions,
+                                      const VkShaderModule                                  inVS,
+                                      const VkShaderModule                                  inFS);
 VkPipeline     CreatePSOVGF(const std::vector<VkVertexInputBindingDescription>&   inVertexInputBindingDescriptions,
                             const std::vector<VkVertexInputAttributeDescription>& inVertexInputAttributeDescriptions,
                             const VkShaderModule                                  inVS,

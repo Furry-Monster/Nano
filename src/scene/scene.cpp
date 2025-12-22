@@ -1,20 +1,22 @@
-#include "Scene.h"
+#include "scene.h"
 #include <GLFW/glfw3.h>
 #include <stdio.h>
 #include <cmath>
 #include "../math/matrix4.h"
 #include "../math/quaternion.h"
-#include "../render/BattleFireVulkan.h"
-#include "../render/RenderPass.h"
-#include "../render/StaticMesh.h"
-#include "SceneNode.h"
+#include "../render/render_pass.h"
+#include "../render/static_mesh.h"
+#include "../render/vulkan_rhi.h"
+#include "scene_node.h"
+
 #define _4MB 4194304
-static float             sLODScale, sLODScaleHW;
-static float4            sCameraPositionWS(-330.0f, 330.0f, -330.0f), sCameraTargetPositionWS(0.0f, 80.0f, 0.0f);
-static matrix4           sProjectionMatrix, sViewMatrix, sModelMatrix;
-static GlobalConstants   sGlobalConstantsData;
-static BattleFireBuffer *sGlobalConstantsBuffer, *sBVHBuffer, *sEchoBuffer, *sVisBuffer64, *sNaniteMesh,
-    *sVisiableClusterSHWH, *sWorkArgsBuffer[2], *sMainAndPostNodeAndClusterBatches;
+
+static float           sLODScale, sLODScaleHW;
+static float4          sCameraPositionWS(-330.0f, 330.0f, -330.0f), sCameraTargetPositionWS(0.0f, 80.0f, 0.0f);
+static matrix4         sProjectionMatrix, sViewMatrix, sModelMatrix;
+static GlobalConstants sGlobalConstantsData;
+static Buffer *sGlobalConstantsBuffer, *sBVHBuffer, *sEchoBuffer, *sVisBuffer64, *sNaniteMesh, *sVisiableClusterSHWH,
+    *sWorkArgsBuffer[2], *sMainAndPostNodeAndClusterBatches;
 static Texture2D*  sVisualizationTexture;
 static RenderPass *sInitPass, *sNodeAndClusterCullPasses[4], *sClusterCullPass, *sHWRasterizePass, *sVisuaizePass;
 static SceneNode*  sFSQNode;

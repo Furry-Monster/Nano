@@ -1,5 +1,5 @@
-#include "RenderPass.h"
-#include "BattleFireVulkan.h"
+#include "render_pass.h"
+#include "vulkan_rhi.h"
 void RenderPass::SetVSPS(const char* inVSPath, const char* inFSPath)
 {
     mVertexShader = CompileShader(inVSPath);
@@ -52,7 +52,7 @@ void RenderPass::SetComputeImage(int inBindingPoint, Texture2D* inImage, bool in
         mOutputTextures.push_back(inImage);
     }
 }
-void RenderPass::SetSSBO(int inBindingPoint, BattleFireBuffer* inBuffer, bool inIsOutputResource)
+void RenderPass::SetSSBO(int inBindingPoint, Buffer* inBuffer, bool inIsOutputResource)
 {
     VkDescriptorSetLayoutBinding descriptorSetLayoutBinding;
     descriptorSetLayoutBinding.binding         = inBindingPoint;
@@ -83,7 +83,7 @@ void RenderPass::SetSSBO(int inBindingPoint, BattleFireBuffer* inBuffer, bool in
         mOutputBuffers.push_back(inBuffer);
     }
 }
-void RenderPass::SetUniformBufferObject(int inBindingPoint, BattleFireBuffer* inBuffer)
+void RenderPass::SetUniformBufferObject(int inBindingPoint, Buffer* inBuffer)
 {
     VkDescriptorSetLayoutBinding descriptorSetLayoutBinding;
     descriptorSetLayoutBinding.binding         = inBindingPoint;
@@ -452,7 +452,7 @@ void RenderPass::Execute()
         }
     }
 }
-void RenderPass::ExecuteIndirect(BattleFireBuffer* inIndirectBuffer)
+void RenderPass::ExecuteIndirect(Buffer* inIndirectBuffer)
 {
     VkDevice        device        = GetVulkanDevice();
     VkCommandBuffer commandBuffer = CreateCommandBuffer();

@@ -1,4 +1,4 @@
-#include "BattleFireVulkan.h"
+#include "vulkan_rhi.h"
 #include <GLFW/glfw3.h>
 #include <stdio.h>
 #include <string.h>
@@ -36,13 +36,13 @@ static VkCommandPool                sCommandPool = nullptr; // command pool -> c
 static VkSemaphore                  sReadyToBeRendered, sReadyToShow;
 static uint32_t                     sCurrentFBOToRenderIndex = 0;
 
-static BattleFireShaderParameterDescription sUberShaderParameterDescription;
-BattleFireBuffer::BattleFireBuffer()
+static ShaderParameterDescription sUberShaderParameterDescription;
+Buffer::Buffer()
 {
     mBuffer = nullptr;
     mMemory = nullptr;
 }
-BattleFireBuffer::~BattleFireBuffer()
+Buffer::~Buffer()
 {
     //
 }
@@ -93,12 +93,12 @@ static void InitUberPassPipelineLayout()
     vkCreatePipelineLayout(
         sDevice, &pipelineLayoutCreateInfo, nullptr, &sUberShaderParameterDescription.mPipelineLayout);
 }
-BattleFireBuffer* GenBufferObject(VkBufferUsageFlags       inBufferUsageFlag,
-                                  VkMemoryPropertyFlagBits inMemoryPropertyFlagBits,
-                                  const void*              inData,
-                                  int                      inLen)
+Buffer* GenBufferObject(VkBufferUsageFlags       inBufferUsageFlag,
+                        VkMemoryPropertyFlagBits inMemoryPropertyFlagBits,
+                        const void*              inData,
+                        int                      inLen)
 {
-    BattleFireBuffer*  buffer           = new BattleFireBuffer;
+    Buffer*            buffer           = new Buffer;
     VkBufferCreateInfo bufferCreateInfo = {};
     bufferCreateInfo.sType              = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
     bufferCreateInfo.size               = inLen;
@@ -143,7 +143,7 @@ BattleFireBuffer* GenBufferObject(VkBufferUsageFlags       inBufferUsageFlag,
     buffer->mSize = inLen;
     return buffer;
 }
-void BufferSubData(BattleFireBuffer* buffer, const void* data, VkDeviceSize size)
+void BufferSubData(Buffer* buffer, const void* data, VkDeviceSize size)
 {
     void* dst;
     vkMapMemory(sDevice, buffer->mMemory, 0, size, 0, &dst);
@@ -743,20 +743,17 @@ void EndSwapChainRenderPass(VkCommandBuffer inCommandBuffer)
     }
     vkFreeCommandBuffers(sDevice, sCommandPool, 1, &inCommandBuffer);
 }
-VkQueue                               GetGraphicQueue() { return sGraphicQueue; }
-VkDevice                              GetVulkanDevice() { return sDevice; }
-VkPhysicalDevice                      GetPhysicalDevice() { return sGPU; }
-VkRenderPass                          GetSwapChainRenderPass() { return sSwapChainRenderPass; }
-BattleFireShaderParameterDescription* GetUberPassShaderParameterDescription()
-{
-    return &sUberShaderParameterDescription;
-}
-VkPipeline CreatePSO(VkRenderPass                                          inRenderPass,
-                     VkPrimitiveTopology                                   inPrimitiveType,
-                     const std::vector<VkVertexInputBindingDescription>&   inVertexInputBindingDescriptions,
-                     const std::vector<VkVertexInputAttributeDescription>& inVertexInputAttributeDescriptions,
-                     const VkShaderModule                                  inVS,
-                     const VkShaderModule                                  inFS)
+VkQueue                     GetGraphicQueue() { return sGraphicQueue; }
+VkDevice                    GetVulkanDevice() { return sDevice; }
+VkPhysicalDevice            GetPhysicalDevice() { return sGPU; }
+VkRenderPass                GetSwapChainRenderPass() { return sSwapChainRenderPass; }
+ShaderParameterDescription* GetUberPassShaderParameterDescription() { return &sUberShaderParameterDescription; }
+VkPipeline                  CreatePSO(VkRenderPass                                          inRenderPass,
+                                      VkPrimitiveTopology                                   inPrimitiveType,
+                                      const std::vector<VkVertexInputBindingDescription>&   inVertexInputBindingDescriptions,
+                                      const std::vector<VkVertexInputAttributeDescription>& inVertexInputAttributeDescriptions,
+                                      const VkShaderModule                                  inVS,
+                                      const VkShaderModule                                  inFS)
 {
     VkPipelineVertexInputStateCreateInfo pipelinVertexInputStateCreateInfo = {};
     // pos,texcoord,normal,tangent|pos,texcoord,normal,tangent|pos,texcoord,normal,tangent|..
@@ -1246,7 +1243,7 @@ void TextureSubData(VkImage     inTargetImage,
                         VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
 
     // buffer -> cpu
-    BattleFireBuffer* tempBuffer = GenBufferObject(
+    Buffer* tempBuffer = GenBufferObject(
         VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, nullptr, inImageSizeinBytes);
     void* memPtr = nullptr;
     vkMapMemory(sDevice, tempBuffer->mMemory, 0, inImageSizeinBytes, 0, &memPtr);
@@ -1299,7 +1296,7 @@ void SubmitCubeMapData(VkImage inTargetImage,
     BeginCommandBuffer(commandBuffer, VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
     // image -> transfer dst,barrier
     // buffer -> cpu
-    BattleFireBuffer* tempBuffer[6];
+    Buffer* tempBuffer[6];
     for (int i = 0; i < 6; i++)
     {
         VkImageSubresourceRange imageSubresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, uint32_t(i), 1};

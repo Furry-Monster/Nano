@@ -1,6 +1,6 @@
-#include "Material.h"
-#include "BattleFireVulkan.h"
-#include "StaticMesh.h"
+#include "material.h"
+#include "static_mesh.h"
+#include "vulkan_rhi.h"
 Material::Material()
 {
     mDescriptorSet = nullptr;
@@ -22,7 +22,7 @@ void Material::Init(const char* inVSPath, const char* inFSPath)
         printf("ERROR: Failed to compile fragment shader: %s\n", inFSPath);
         return;
     }
-    BattleFireShaderParameterDescription* parameterDescription = GetUberPassShaderParameterDescription();
+    ShaderParameterDescription* parameterDescription = GetUberPassShaderParameterDescription();
 
     VkDescriptorPoolSize descriptorPoolSize[2] = {};
     descriptorPoolSize[0].type                 = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
@@ -52,7 +52,7 @@ void Material::InitVGF(const char* inVSPath, const char* inGSPath, const char* i
     mGeometryShader = CompileShader(inGSPath);
     mFragmentShader = CompileShader(inFSPath);
 
-    BattleFireShaderParameterDescription* parameterDescription = GetUberPassShaderParameterDescription();
+    ShaderParameterDescription* parameterDescription = GetUberPassShaderParameterDescription();
 
     VkDescriptorPoolSize descriptorPoolSize[2] = {};
     descriptorPoolSize[0].type                 = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
@@ -83,7 +83,7 @@ void Material::InitVTF(const char* inVSPath, const char* inTCSPath, const char* 
     mTESShader      = CompileShader(inTESPath);
     mFragmentShader = CompileShader(inFSPath);
 
-    BattleFireShaderParameterDescription* parameterDescription = GetUberPassShaderParameterDescription();
+    ShaderParameterDescription* parameterDescription = GetUberPassShaderParameterDescription();
 
     VkDescriptorPoolSize descriptorPoolSize[2] = {};
     descriptorPoolSize[0].type                 = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
@@ -190,7 +190,7 @@ void Material::Active(VkCommandBuffer inCommandBuffer, VkRenderPass inRenderPass
                                 mFragmentShader);
         }
     }
-    BattleFireShaderParameterDescription* parameterDescription = GetUberPassShaderParameterDescription();
+    ShaderParameterDescription* parameterDescription = GetUberPassShaderParameterDescription();
 
     vkCmdBindPipeline(inCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mPSO);
     vkCmdBindDescriptorSets(inCommandBuffer,

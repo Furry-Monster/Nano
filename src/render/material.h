@@ -1,5 +1,5 @@
 #pragma once
-#include "BattleFireVulkan.h"
+#include "vulkan_rhi.h"
 class Material
 {
 public:

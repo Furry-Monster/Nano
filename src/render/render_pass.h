@@ -1,6 +1,6 @@
 #pragma once
 #include <string>
-#include "BattleFireVulkan.h"
+#include "vulkan_rhi.h"
 enum class ERenderPassType
 {
     ERPT_GRAPHICS,
@@ -26,7 +26,7 @@ public:
     std::vector<VkDescriptorSetLayoutBinding> mDescriptorSetLayoutBindings;
     std::vector<VkDescriptorPoolSize>         mDescriptorPoolSizes;
     std::vector<Texture2D*>                   mTextures, mOutputTextures;
-    std::vector<BattleFireBuffer*>            mBuffers, mOutputBuffers, mUniformBuffers;
+    std::vector<Buffer*>                      mBuffers, mOutputBuffers, mUniformBuffers;
     std::vector<VkWriteDescriptorSet>         mWriteDescriptorSets;
     int                                       mDispatchX, mDispatchY, mDispatchZ;
     uint32_t                                  mViewportWidth, mViewportHeight;
@@ -38,12 +38,12 @@ public:
         mViewportHeight(0u)
     {}
     void SetVSPS(const char* inVSPath, const char* inFSPath);
-    void SetUniformBufferObject(int inBindingPoint, BattleFireBuffer* inUBO);
+    void SetUniformBufferObject(int inBindingPoint, Buffer* inUBO);
     void SetCS(const char* inCSPath);
     void SetComputeImage(int inBindingPoint, Texture2D* inImage, bool inIsOutputResource = false);
-    void SetSSBO(int inBindingPoint, BattleFireBuffer* inBuffer, bool inIsOutputResource = false);
+    void SetSSBO(int inBindingPoint, Buffer* inBuffer, bool inIsOutputResource = false);
     void SetComputeDispatchArgs(int inX, int inY, int inZ);
     void Build(uint32_t inCanvasWidth = 0u, uint32_t inCanvasHeight = 0u);
     void Execute();
-    void ExecuteIndirect(BattleFireBuffer* inIndirectBuffer);
+    void ExecuteIndirect(Buffer* inIndirectBuffer);
 };

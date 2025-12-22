@@ -4,7 +4,7 @@
 
 代码比较混乱并且存在一些 Vulkan 错误，后续会慢慢修复，由于个人对 Vulkan API不太熟悉，周期可能较长，如果可以帮忙修复的话可以提一个PR。
 
-![showreal](showreal.png)
+![demo](demo.png)
 
 ## 构建
 
@@ -19,7 +19,6 @@ cd ../
 mkdir build
 cmake --build build
 ```
-
 
 ## 运行
 
