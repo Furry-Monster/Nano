@@ -4,12 +4,12 @@
 
 class quaternion {
 public:
-    float w, x, y, z;
+  float w, x, y, z;
 
-    quaternion(float angleX, float angleY, float angleZ);
-    quaternion(float w, float x, float y, float z);
+  quaternion(float angleX, float angleY, float angleZ);
+  quaternion(float w, float x, float y, float z);
 
-    void operator=(const quaternion& rhs);
-    quaternion operator*(const quaternion& rhs) const;
-    matrix3 toMatrix3() const;
+  void operator=(const quaternion &rhs);
+  quaternion operator*(const quaternion &rhs) const;
+  matrix3 toMatrix3() const;
 };
