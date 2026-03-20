@@ -1,14 +1,25 @@
-set(TARGET_NAME Nano)
+set(NANO_SOURCES
+    main.cpp
 
-file(GLOB_RECURSE SOURCES "*.cpp" "*.c")
-file(GLOB_RECURSE HEADERS "*.hpp" "*.h")
+    math/float4.cpp
+    math/matrix4.cpp
+    math/quaternion.cpp
 
-if(SOURCES)
-    add_executable(${TARGET_NAME} ${SOURCES} ${HEADERS})
+    render/vulkan_rhi.cpp
+    render/render_pass.cpp
+    render/material.cpp
+    render/static_mesh.cpp
 
-    target_link_libraries(${TARGET_NAME} PUBLIC reflibs)
+    scene/scene.cpp
+    scene/scene_node.cpp
+)
 
-    target_include_directories(${TARGET_NAME} PUBLIC
-        ${CMAKE_CURRENT_SOURCE_DIR}
-    )
-endif()
+add_executable(Nano ${NANO_SOURCES})
+
+target_include_directories(Nano PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+)
+
+target_link_libraries(Nano PRIVATE reflibs)
+
+add_dependencies(Nano copy_resources)

@@ -1,93 +1,53 @@
-#ifndef RENDER_PASS_H
-#define RENDER_PASS_H
+#pragma once
 
-#include <vulkan/vulkan_core.h>
-#include <cstdint>
-#include <memory>
+#include "vulkan_rhi.h"
+
 #include <string>
 #include <vector>
 
-namespace Nano
-{
-    class Shader;
-    class Pipeline;
-    class DescriptorSet;
-    class DescriptorSetLayout;
-    class Buffer;
-    class Texture;
-    class CommandBuffer;
+enum class RenderPassType { Compute, Graphics };
 
-    enum class RenderPassType
-    {
-        Graphics,
-        Compute
+class RenderPass {
+public:
+  RenderPassType mType;
+  std::string mName;
+
+  union {
+    struct {
+      VkShaderModule mVertexShader;
+      VkShaderModule mFragmentShader;
     };
+    VkShaderModule mComputeShader;
+  };
 
-    class RenderPass
-    {
-    public:
-        RenderPass(RenderPassType type, const char* name);
-        ~RenderPass() noexcept;
+  VkPipeline mPSO = VK_NULL_HANDLE;
+  VkPipelineLayout mPipelineLayout = VK_NULL_HANDLE;
+  VkDescriptorSet mDescriptorSet = VK_NULL_HANDLE;
+  VkDescriptorPool mDescriptorPool = VK_NULL_HANDLE;
+  VkRenderPass mRenderPass = VK_NULL_HANDLE;
+  VkFramebuffer mFrameBuffer = VK_NULL_HANDLE;
 
-        RenderPass(const RenderPass&)                = delete;
-        RenderPass& operator=(const RenderPass&)     = delete;
-        RenderPass(RenderPass&&) noexcept            = delete;
-        RenderPass& operator=(RenderPass&&) noexcept = delete;
+  std::vector<VkDescriptorSetLayoutBinding> mLayoutBindings;
+  std::vector<VkWriteDescriptorSet> mWriteDescriptorSets;
+  std::vector<Texture2D *> mTextures;
+  std::vector<Texture2D *> mOutputTextures;
+  std::vector<VulkanBuffer *> mBuffers;
+  std::vector<VulkanBuffer *> mOutputBuffers;
+  std::vector<VulkanBuffer *> mUniformBuffers;
 
-        void setComputeShader(const char* compute_shader_path);
-        void setGraphicsShaders(const char* vertex_shader_path, const char* fragment_shader_path);
+  int mDispatchX = 1, mDispatchY = 1, mDispatchZ = 1;
+  uint32_t mViewportWidth = 0, mViewportHeight = 0;
 
-        void bindResource(uint32_t binding, Buffer* buffer, VkDescriptorType type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
-        void bindResource(uint32_t         binding,
-                          Texture*         texture,
-                          VkDescriptorType type      = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-                          bool             is_output = false);
+  RenderPass(RenderPassType type, const char *name)
+      : mType(type), mName(name) {}
 
-        void setUniformBuffer(uint32_t binding, Buffer* buffer);
-        void setComputeDispatchArgs(uint32_t x, uint32_t y, uint32_t z);
-
-        bool build(uint32_t canvas_width = 0, uint32_t canvas_height = 0);
-        void execute();
-        void executeIndirect(Buffer* indirect_buffer);
-
-        RenderPassType     getType() const { return m_type; }
-        const std::string& getName() const { return m_name; }
-
-    private:
-        void cleanup();
-        bool buildCompute();
-        bool buildGraphics(uint32_t canvas_width, uint32_t canvas_height);
-        void executeCompute();
-        void executeGraphics();
-
-        RenderPassType m_type;
-        std::string    m_name;
-
-        std::unique_ptr<Shader> m_compute_shader;
-        std::unique_ptr<Shader> m_vertex_shader;
-        std::unique_ptr<Shader> m_fragment_shader;
-
-        std::unique_ptr<Pipeline>            m_pipeline;
-        std::unique_ptr<DescriptorSetLayout> m_descriptor_set_layout;
-        std::unique_ptr<DescriptorSet>       m_descriptor_set;
-
-        std::vector<VkDescriptorSetLayoutBinding> m_descriptor_bindings;
-        std::vector<Buffer*>                      m_buffers;
-        std::vector<Texture*>                     m_textures;
-        std::vector<Texture*>                     m_output_textures;
-        std::vector<Buffer*>                      m_uniform_buffers;
-
-        uint32_t m_dispatch_x {1};
-        uint32_t m_dispatch_y {1};
-        uint32_t m_dispatch_z {1};
-
-        uint32_t m_viewport_width {0};
-        uint32_t m_viewport_height {0};
-
-        VkRenderPass  m_render_pass {VK_NULL_HANDLE};
-        VkFramebuffer m_framebuffer {VK_NULL_HANDLE};
-    };
-
-} // namespace Nano
-
-#endif // !RENDER_PASS_H
+  void SetVSPS(const char *vsPath, const char *fsPath);
+  void SetCS(const char *csPath);
+  void SetUniformBufferObject(int binding, VulkanBuffer *ubo);
+  void SetSSBO(int binding, VulkanBuffer *buffer, bool isOutput = false);
+  void SetComputeImage(int binding, Texture2D *image, bool isOutput = false);
+  void SetComputeDispatchArgs(int x, int y, int z);
+  void Build(uint32_t canvasWidth = 0, uint32_t canvasHeight = 0);
+  void Execute();
+  void ExecuteIndirect(VulkanBuffer *indirectBuffer);
+};
