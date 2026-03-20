@@ -7,12 +7,12 @@ class float4 {
 public:
   union {
     struct {
-      float x, y, z, w;
+      float x{0.0f}, y{0.0f}, z{0.0f}, w{0.0f};
     };
     float v[4];
   };
 
-  float4() : x(0.0f), y(0.0f), z(0.0f), w(0.0f) {}
+  float4() = default;
   explicit float4(float val) : x(val), y(val), z(val), w(val) {}
   explicit float4(float *data)
       : x(data[0]), y(data[1]), z(data[2]), w(data[3]) {}

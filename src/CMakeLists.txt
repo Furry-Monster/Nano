@@ -23,3 +23,22 @@ target_include_directories(Nano PRIVATE
 target_link_libraries(Nano PRIVATE reflibs)
 
 add_dependencies(Nano copy_resources)
+
+# Command-line model exporter:
+# output -> .bvh (hierarchy) + .nanitemesh (page/cluster data) for the Nano shaders.
+add_executable(NaniteExporter
+    exporter/main.cpp
+    exporter/args.cpp
+    exporter/assimp_loader.cpp
+    exporter/nanite_encoder.cpp
+)
+
+target_include_directories(NaniteExporter PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+)
+
+if(TARGET assimp::assimp)
+    target_link_libraries(NaniteExporter PRIVATE assimp::assimp)
+else()
+    target_link_libraries(NaniteExporter PRIVATE assimp)
+endif()
