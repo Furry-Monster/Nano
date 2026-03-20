@@ -264,13 +264,13 @@ void InitScene(int canvasWidth, int canvasHeight) {
   spdlog::info("Scene initialized");
 }
 
-void RenderOneFrame(float /*frameTime*/) {
+void RenderOneFrame([[maybe_unused]] float frameTime) {
   BufferSubData(sGlobalConstantsBuffer, &sGlobalConstantsData,
                 sizeof(GlobalConstants));
 
   sInitPass->Execute();
-  for (int i = 0; i < 4; i++) {
-    sNodeAndClusterCullPasses[i]->Execute();
+  for (const auto &sNodeAndClusterCullPass : sNodeAndClusterCullPasses) {
+    sNodeAndClusterCullPass->Execute();
   }
   sClusterCullPass->Execute();
   sHWRasterizePass->ExecuteIndirect(sWorkArgsBuffer[0]);
