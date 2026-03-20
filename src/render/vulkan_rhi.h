@@ -1,172 +1,112 @@
 #pragma once
-#define GLFW_INCLUDE_VULKAN
-#include <GLFW/glfw3.h>
+
 #include <vulkan/vulkan.h>
+
+#include <cstdint>
 #include <vector>
 
-struct InitVulkanUserData
-{
-    GLFWwindow* mWindow;
-};
+struct GLFWwindow;
 
-struct GlobalConstants
-{
-    union
-    {
-        struct
-        {
-            float        mProjectionMatrix[16];
-            float        mViewMatrix[16]; // View => translate
-            float        mModelMatrix[16];
-            unsigned int mMisc0[4];            // 0xFFFFFFFFu
-            float        mCameraPositionWS[4]; // x,y,z,w => lodScale
-            float        mViewDirectionWS[4];  // x,y,z,w => lodScaleHW
+struct GlobalConstants {
+    union {
+        struct {
+            float mProjectionMatrix[16];
+            float mViewMatrix[16];
+            float mModelMatrix[16];
+            unsigned int mMisc0[4];       // x: Manual MipLevel
+            float mCameraPositionWS[4];   // x,y,z,w=lodScale
+            float mViewDirectionWS[4];    // x,y,z,w=lodScaleHW
         };
         float mData[1024];
     };
-    void SetProjectionMatrix(const float* inMatrix);
-    void SetViewMatrix(float* inMatrix);
-    void SetModelMatrix(const float* inMatrix);
+
+    void SetProjectionMatrix(const float* matrix);
+    void SetViewMatrix(float* matrix);
+    void SetModelMatrix(const float* matrix);
     void SetMisc0(unsigned int x, unsigned int y, unsigned int z, unsigned int w);
-    void SetCameraPositionWS(float inX, float inY, float inZ, float inW = 0.0f);
-    void SetCameraViewDirectionWS(float inX, float inY, float inZ, float inW = 0.0f);
+    void SetCameraPositionWS(float x, float y, float z, float w = 0.0f);
+    void SetCameraViewDirectionWS(float x, float y, float z, float w = 0.0f);
 };
 
-struct Texture
-{
-    VkImage            mImage;
-    VkDeviceMemory     mMemory;
-    VkImageView        mImageView;
-    VkFormat           mFormat;
-    VkImageAspectFlags mImageAspectFlag;
-    Texture()
-    {
-        mImage           = nullptr;
-        mMemory          = nullptr;
-        mImageView       = nullptr;
-        mFormat          = VK_FORMAT_UNDEFINED;
-        mImageAspectFlag = VK_IMAGE_ASPECT_NONE;
-    }
+struct Texture {
+    VkImage mImage = VK_NULL_HANDLE;
+    VkDeviceMemory mMemory = VK_NULL_HANDLE;
+    VkImageView mImageView = VK_NULL_HANDLE;
+    VkFormat mFormat = VK_FORMAT_UNDEFINED;
+    VkImageAspectFlags mImageAspectFlag = VK_IMAGE_ASPECT_NONE;
 };
 
-struct Texture2D : public Texture
-{
-    int mWidth, mHeight;
-    int mChannelCount;
-    Texture2D()
-    {
-        mWidth        = 0;
-        mHeight       = 0;
-        mChannelCount = 0;
-    }
+struct Texture2D : public Texture {
+    int mWidth = 0;
+    int mHeight = 0;
+    int mChannelCount = 0;
 };
 
-struct Buffer
-{
-    VkBuffer       mBuffer;
-    VkDeviceMemory mMemory;
-    int            mSize;
-    Buffer();
-    ~Buffer();
+struct VulkanBuffer {
+    VkBuffer mBuffer = VK_NULL_HANDLE;
+    VkDeviceMemory mMemory = VK_NULL_HANDLE;
+    int mSize = 0;
 };
 
-struct ShaderParameterDescription
-{
-    VkDescriptorSetLayout mDescriptorSetLayout;
-    VkPipelineLayout      mPipelineLayout;
+struct ShaderParameterDescription {
+    VkDescriptorSetLayout mDescriptorSetLayout = VK_NULL_HANDLE;
+    VkPipelineLayout mPipelineLayout = VK_NULL_HANDLE;
 };
 
-bool             InitVulkan(void* inUserData, int inCanvasWidth, int inCanvasHeight);
-VkCommandBuffer  CreateCommandBuffer(VkCommandBufferLevel inCommandBufferLevel = VK_COMMAND_BUFFER_LEVEL_PRIMARY);
-void             BeginCommandBuffer(VkCommandBuffer inCommandBuffer, VkCommandBufferUsageFlagBits inUsage);
-uint32_t         BeginSwapChainRenderPass(VkCommandBuffer inCommandBuffer);
-void             EndSwapChainRenderPass(VkCommandBuffer inCommandBuffer);
-VkQueue          GetGraphicQueue();
-VkDevice         GetVulkanDevice();
+bool InitVulkan(GLFWwindow* window, int canvasWidth, int canvasHeight);
+
+VkCommandBuffer CreateCommandBuffer(
+    VkCommandBufferLevel level = VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+void BeginCommandBuffer(VkCommandBuffer cb, VkCommandBufferUsageFlagBits usage);
+uint32_t BeginSwapChainRenderPass(VkCommandBuffer cb);
+void EndSwapChainRenderPass(VkCommandBuffer cb);
+
+VkQueue GetGraphicQueue();
+VkDevice GetVulkanDevice();
 VkPhysicalDevice GetPhysicalDevice();
-VkRenderPass     GetSwapChainRenderPass();
-Buffer*          GenBufferObject(VkBufferUsageFlags       inBufferUsageFlag,
-                                 VkMemoryPropertyFlagBits inMemoryPropertyFlagBits,
-                                 const void*              inData = nullptr,
-                                 int                      inLen  = 0);
-void             BufferSubData(Buffer* buffer, const void* data, VkDeviceSize size);
-ShaderParameterDescription* GetUberPassShaderParameterDescription();
-VkPipeline                  CreatePSO(VkRenderPass                                          inRenderPass,
-                                      VkPrimitiveTopology                                   inPrimitiveType,
-                                      const std::vector<VkVertexInputBindingDescription>&   inVertexInputBindingDescriptions,
-                                      const std::vector<VkVertexInputAttributeDescription>& inVertexInputAttributeDescriptions,
-                                      const VkShaderModule                                  inVS,
-                                      const VkShaderModule                                  inFS);
-VkPipeline     CreatePSOVGF(const std::vector<VkVertexInputBindingDescription>&   inVertexInputBindingDescriptions,
-                            const std::vector<VkVertexInputAttributeDescription>& inVertexInputAttributeDescriptions,
-                            const VkShaderModule                                  inVS,
-                            const VkShaderModule                                  inGS,
-                            const VkShaderModule                                  inFS);
-VkPipeline     CreatePSOVTF(VkRenderPass                                          inRenderPass,
-                            const std::vector<VkVertexInputBindingDescription>&   inVertexInputBindingDescriptions,
-                            const std::vector<VkVertexInputAttributeDescription>& inVertexInputAttributeDescriptions,
-                            const VkShaderModule                                  inVS,
-                            const VkShaderModule                                  inTCS,
-                            const VkShaderModule                                  inTES,
-                            const VkShaderModule                                  inFS);
-VkShaderModule CompileShader(const char* inFilePath);
-VkFramebuffer* GetSwapChainFrameBuffers();
-void           TransferImageLayout(VkCommandBuffer         inCommandBuffer,
-                                   VkImage                 inImage,
-                                   VkImageSubresourceRange inSubresourceRange,
-                                   VkImageLayout           inOldLayout,
-                                   VkAccessFlags           inOldAccessFlags,
-                                   VkPipelineStageFlags    inOld,
-                                   VkImageLayout           inNewLayout,
-                                   VkAccessFlags           inNewAccessFlags,
-                                   VkPipelineStageFlags    inNew);
-void           GenImage(Texture*                 inOutTexture,
-                        int                      inWidth,
-                        int                      inHeight,
-                        VkImageUsageFlags        inUsage,
-                        VkMemoryPropertyFlagBits inPreferedMemoryPropertyFlagBits);
-void           SubmitBufferDataToImage(VkCommandBuffer inCommandBuffer,
-                                       VkBuffer        inBuffer,
-                                       VkImage         inImage,
-                                       int             inWidth,
-                                       int             inHeight,
-                                       int             inFaceIndex);
-void           TextureSubData(VkImage     inTargetImage,
-                              const void* inPixelData,
-                              int         inImageWidth,
-                              int         inImageHeight,
-                              int         inImageSizeinBytes);
-VkImageView    GenImageView2D(VkImage inImage, VkFormat inFormat, VkImageAspectFlags inImageAspectFlag);
-VkSampler      GenSampler(VkFilter             inMinFilter = VK_FILTER_LINEAR,
-                          VkFilter             inMagFilter = VK_FILTER_LINEAR,
-                          VkSamplerAddressMode inWrapU     = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
-                          VkSamplerAddressMode inWrapV     = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
-                          VkSamplerAddressMode inWrapW     = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE);
-void           GenImageCubeMap(Texture*                 inOutTexture,
-                               int                      inWidth,
-                               int                      inHeight,
-                               VkImageUsageFlags        inUsage,
-                               VkMemoryPropertyFlagBits inPreferedMemoryPropertyFlagBits);
-void           SubmitCubeMapData(VkImage inTargetImage,
-                                 void**  inPixelData,
-                                 int     inImageWidth,
-                                 int     inImageHeight,
-                                 int     inImageSizeinBytes);
-VkImageView    GenImageViewCubeMap(VkImage inImage, VkFormat inFormat, VkImageAspectFlags inImageAspectFlag);
-void           BeginEvent(VkCommandBuffer inCommandBuffer, const char* inName);
-void           EndEvent(VkCommandBuffer inCommandBuffer);
-void           SetObjectName(VkObjectType inType, void* inObject, const char* inName);
+VkRenderPass GetSwapChainRenderPass();
 
-struct ScopedEvent
-{
+VulkanBuffer* GenBufferObject(VkBufferUsageFlags usage, VkMemoryPropertyFlagBits memProps,
+                              const void* data = nullptr, int size = 0);
+void BufferSubData(VulkanBuffer* buffer, const void* data, VkDeviceSize size);
+
+ShaderParameterDescription* GetUberPassShaderParameterDescription();
+
+VkPipeline CreatePSO(VkRenderPass renderPass, VkPrimitiveTopology topology,
+                      const std::vector<VkVertexInputBindingDescription>& bindings,
+                      const std::vector<VkVertexInputAttributeDescription>& attributes,
+                      VkShaderModule vs, VkShaderModule fs);
+
+VkShaderModule LoadShaderModule(const char* filePath);
+VkFramebuffer* GetSwapChainFrameBuffers();
+
+void TransferImageLayout(VkCommandBuffer cb, VkImage image,
+                          VkImageSubresourceRange subresourceRange, VkImageLayout oldLayout,
+                          VkAccessFlags oldAccess, VkPipelineStageFlags oldStage,
+                          VkImageLayout newLayout, VkAccessFlags newAccess,
+                          VkPipelineStageFlags newStage);
+
+void GenImage(Texture* outTex, int width, int height, VkImageUsageFlags usage,
+              VkMemoryPropertyFlagBits memProps);
+VkImageView GenImageView2D(VkImage image, VkFormat format, VkImageAspectFlags aspect);
+VkSampler GenSampler(VkFilter minFilter = VK_FILTER_LINEAR,
+                     VkFilter magFilter = VK_FILTER_LINEAR,
+                     VkSamplerAddressMode wrapU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+                     VkSamplerAddressMode wrapV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+                     VkSamplerAddressMode wrapW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE);
+
+void BeginEvent(VkCommandBuffer cb, const char* name);
+void EndEvent(VkCommandBuffer cb);
+void SetObjectName(VkObjectType type, void* object, const char* name);
+
+struct ScopedEvent {
     VkCommandBuffer mCommandBuffer;
-    ScopedEvent(VkCommandBuffer inCommandBuffer, const char* inName) : mCommandBuffer(inCommandBuffer)
-    {
-        BeginEvent(inCommandBuffer, inName);
+    ScopedEvent(VkCommandBuffer cb, const char* name) : mCommandBuffer(cb) {
+        BeginEvent(cb, name);
     }
     ~ScopedEvent() { EndEvent(mCommandBuffer); }
 };
 
-#define EVENT_VAR_INNER(CommandBuffer, inName, line) _scopedEvent_##line(CommandBuffer, inName)
-#define EventVar(CommandBuffer, inName, n) EVENT_VAR_INNER(CommandBuffer, inName, n)
-#define SCOPED_EVENT(CommandBuffer, inName) ScopedEvent EventVar(CommandBuffer, inName, __LINE__)
+#define SCOPED_EVENT_INNER(cb, name, line) ScopedEvent _scopedEvent_##line(cb, name)
+#define SCOPED_EVENT_EXPAND(cb, name, line) SCOPED_EVENT_INNER(cb, name, line)
+#define SCOPED_EVENT(cb, name) SCOPED_EVENT_EXPAND(cb, name, __LINE__)

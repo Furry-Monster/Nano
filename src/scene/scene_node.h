@@ -1,29 +1,24 @@
 #pragma once
-#include "../math/float4.h"
+
 #include "../math/matrix4.h"
 #include "../render/static_mesh.h"
 
-class SceneNode
-{
+class SceneNode {
 public:
-    float4           mPosition;
-    float4           mRotation;
-    float4           mScale;
-    bool             mbNeedUpdate;
-    matrix4          mModelMatrix;
-    matrix4          mNormalMatrix;
-    StaticMesh*      mStaticMesh;
-    Buffer*          mUBO;
-    Buffer*          mUBO1;
-    bool             mbGeneratedDrawCommand;
-    VkCommandBuffer* mCachedDrawCommand;
+    float4 mPosition;
+    float4 mRotation;
+    float4 mScale;
+    bool mNeedUpdate = true;
+    matrix4 mModelMatrix;
+    matrix4 mNormalMatrix;
+    StaticMesh* mStaticMesh = nullptr;
+    VulkanBuffer* mUBO = nullptr;
+    VulkanBuffer* mUBO1 = nullptr;
+
     SceneNode();
-    void SetPosition(float inX, float inY, float inZ);
-    void SetRotation(float inX, float inY, float inZ);
-    void SetScale(float inX, float inY, float inZ);
-    void Draw(VkCommandBuffer inCommandBuffer,
-              VkRenderPass    inRenderPass,
-              matrix4&        inProjectionMatrix,
-              matrix4&        inViewMatrix);
-    void GenerateDrawCommand(matrix4& inProjectionMatrix, matrix4& inViewMatrix);
+    void SetPosition(float x, float y, float z);
+    void SetRotation(float x, float y, float z);
+    void SetScale(float x, float y, float z);
+    void Draw(VkCommandBuffer cb, VkRenderPass renderPass, matrix4& projMatrix,
+              matrix4& viewMatrix);
 };

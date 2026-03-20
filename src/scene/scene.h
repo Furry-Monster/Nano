@@ -1,5 +1,5 @@
 #pragma once
 
-void InitScene(int inCanvasWidth, int inCanvasHeight);
-void RenderOneFrame(float inFrameTime = 0.0f);
-void OnKeyUp(int inKeyCode);
+void InitScene(int canvasWidth, int canvasHeight);
+void RenderOneFrame(float frameTime = 0.0f);
+void OnKeyUp(int keyCode);

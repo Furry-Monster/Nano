@@ -1,44 +1,56 @@
 # Nano
 
-基于 Vulkan 的一个 UE5-Nanite虚拟几何体系统 的粗浅复现。
+A Vulkan-based virtual geometry system inspired by UE5 Nanite.
 
-代码比较混乱并且存在一些 Vulkan 错误，后续会慢慢修复，由于个人对 Vulkan API不太熟悉，周期可能较长，如果可以帮忙修复的话可以提一个PR。
+Implements BVH-based LOD selection, cluster culling, hardware rasterization with VisBuffer, and per-cluster visualization.
 
 ![demo](demo.png)
 
-## 构建
+## Build
 
 ```bash
+# Compile shaders
+cd shaders && chmod +x build.sh && ./build.sh && cd ..
 
-cd shaders
-chmod +x compile.sh
-./compile.sh
-
-cd ../
-
-mkdir build
+# Build
+cmake -B build -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
 cmake --build build
 ```
 
-## 运行
+## Run
 
-构建完成后，可执行文件位于 `bin/` 目录。
+```bash
+cd bin && ./Nano
+```
 
-## 依赖
+Use **Up/Down** arrow keys to switch LOD mip levels.
+
+## Dependencies
 
 - CMake 3.20+
-- C++17 编译器,不支持MSVC
-- Vulkan SDK
+- C++17 (Clang recommended, MSVC not supported)
+- Vulkan SDK 1.2+
 - GLFW
-- glslc 或者 glslangValidator
+- glslc (from Vulkan SDK)
 
-## 项目结构
+## Project Structure
 
-- `src/` - 源代码
-  - `main.cpp` - 主程序入口
-  - `render/` - 渲染相关代码
-  - `scene/` - 场景管理
-  - `math/` - 数学库
-- `shaders/` - 着色器文件
-- `res/` - 资源文件
-- `libs/` - 第三方库
+```
+src/
+  main.cpp              - GLFW window + main loop
+  math/                 - Custom math library (float4, matrix4, quaternion)
+  render/               - Vulkan RHI, render passes, materials, meshes
+  scene/                - Scene management and node hierarchy
+shaders/                - GLSL compute and graphics shaders
+res/                    - Runtime assets (BVH, Nanite mesh data)
+libs/                   - Third-party libraries (GLFW, GLM, ImGui, spdlog, stb)
+```
+
+## Rendering Pipeline
+
+1. **Init** (Compute) - Clear VisBuffer64, initialize work arguments
+2. **NodeAndClusterCull** (Compute x4) - BVH traversal, collect visible clusters by LOD
+3. **ClusterCull** (Compute) - Copy visible clusters to output buffer
+4. **HWRasterize** (Graphics, Indirect) - Rasterize clusters, write depth+clusterID to VisBuffer64 via atomicMin
+5. **Visualize** (Compute) - Convert VisBuffer64 cluster IDs to colors via MurmurHash
+6. **SwapChain** (Graphics) - Blit visualization texture to screen

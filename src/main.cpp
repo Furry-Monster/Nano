@@ -1,71 +1,66 @@
-#define GLFW_INCLUDE_VULKAN
-#include <GLFW/glfw3.h>
-#include <stdio.h>
-#include <chrono>
 #include "render/vulkan_rhi.h"
 #include "scene/scene.h"
 
-static void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods)
-{
-    if (action == GLFW_RELEASE)
-    {
+#define GLFW_INCLUDE_VULKAN
+#include <GLFW/glfw3.h>
+#include <spdlog/spdlog.h>
+
+#include <chrono>
+
+static constexpr int kWindowWidth = 1280;
+static constexpr int kWindowHeight = 720;
+
+static void KeyCallback(GLFWwindow* /*window*/, int key, int /*scancode*/, int action,
+                        int /*mods*/) {
+    if (action == GLFW_RELEASE) {
         OnKeyUp(key);
     }
 }
 
-int main()
-{
-    if (!glfwInit())
-    {
-        printf("Failed to initialize GLFW\n");
+int main() {
+    spdlog::set_level(spdlog::level::info);
+
+    if (!glfwInit()) {
+        spdlog::error("Failed to initialize GLFW");
         return -1;
     }
 
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
 
-    int         canvasWidth  = 1280;
-    int         canvasHeight = 720;
-    GLFWwindow* window = glfwCreateWindow(canvasWidth, canvasHeight, "Nano Cluster Visualization", nullptr, nullptr);
-    if (!window)
-    {
-        printf("Failed to create GLFW window\n");
+    GLFWwindow* window =
+        glfwCreateWindow(kWindowWidth, kWindowHeight, "Nano - Virtual Geometry", nullptr, nullptr);
+    if (!window) {
+        spdlog::error("Failed to create GLFW window");
         glfwTerminate();
         return -1;
     }
 
-    printf("canvas : %d x %d\n", canvasWidth, canvasHeight);
+    glfwSetKeyCallback(window, KeyCallback);
 
-    InitVulkanUserData initVulkanUserData = {window};
-    bool               vulkanInited       = InitVulkan(&initVulkanUserData, canvasWidth, canvasHeight);
-    if (!vulkanInited)
-    {
-        printf("ERROR: Failed to initialize Vulkan\n");
+    if (!InitVulkan(window, kWindowWidth, kWindowHeight)) {
+        spdlog::error("Failed to initialize Vulkan");
         glfwDestroyWindow(window);
         glfwTerminate();
         return -1;
     }
 
-    InitScene(canvasWidth, canvasHeight);
-
-    glfwSetKeyCallback(window, keyCallback);
+    InitScene(kWindowWidth, kWindowHeight);
 
     auto lastTime = std::chrono::high_resolution_clock::now();
-    while (!glfwWindowShouldClose(window))
-    {
+
+    while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
 
-        if (vulkanInited)
-        {
-            auto currentTime = std::chrono::high_resolution_clock::now();
-            auto frameTime   = std::chrono::duration_cast<std::chrono::milliseconds>(currentTime - lastTime).count();
-            lastTime         = currentTime;
-            float frameTimeInSecond = float(frameTime) / 1000.0f;
+        auto currentTime = std::chrono::high_resolution_clock::now();
+        float deltaTime =
+            std::chrono::duration<float>(currentTime - lastTime).count();
+        lastTime = currentTime;
 
-            RenderOneFrame(frameTimeInSecond);
-        }
+        RenderOneFrame(deltaTime);
     }
 
+    vkDeviceWaitIdle(GetVulkanDevice());
     glfwDestroyWindow(window);
     glfwTerminate();
     return 0;

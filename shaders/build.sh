@@ -1,23 +1,18 @@
 #!/bin/bash
+set -e
 
-SHADER_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-OUTPUT_DIR="${SHADER_DIR}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
 
-if ! command -v glslc &> /dev/null; then
-    echo "Failure: unable to find glslc. Please install Vulkan SDK or glslang-tools"
-    exit 1
-fi
+echo "Compiling shaders..."
 
-echo "Compile Compute Shaders..."
-glslc -fshader-stage=compute -o "${OUTPUT_DIR}/Init.sb" "${SHADER_DIR}/Init.glsl"
-glslc -fshader-stage=compute -o "${OUTPUT_DIR}/NodeAndClusterCull.sb" "${SHADER_DIR}/NodeAndClusterCull.glsl"
-glslc -fshader-stage=compute -o "${OUTPUT_DIR}/ClusterCull.sb" "${SHADER_DIR}/ClusterCull.glsl"
-glslc -fshader-stage=compute -o "${OUTPUT_DIR}/Visualize.sb" "${SHADER_DIR}/Visualize.glsl"
+glslc -fshader-stage=compute -o Init.sb Init.glsl
+glslc -fshader-stage=compute -o NodeAndClusterCull.sb NodeAndClusterCull.glsl
+glslc -fshader-stage=compute -o ClusterCull.sb ClusterCull.glsl
+glslc -fshader-stage=compute -o Visualize.sb Visualize.glsl
+glslc -fshader-stage=vertex -o HWRasterizeVS.sb HWRasterizeVS.glsl
+glslc -fshader-stage=fragment -o HWRasterizeFS.sb HWRasterizeFS.glsl
+glslc -fshader-stage=vertex -o swapchainVS.sb swapchainVS.glsl
+glslc -fshader-stage=fragment -o swapchainFS.sb swapchainFS.glsl
 
-echo "Compile Shaders..."
-glslc -fshader-stage=vertex -o "${OUTPUT_DIR}/HWRasterizeVS.sb" "${SHADER_DIR}/HWRasterizeVS.glsl"
-glslc -fshader-stage=fragment -o "${OUTPUT_DIR}/HWRasterizeFS.sb" "${SHADER_DIR}/HWRasterizeFS.glsl"
-glslc -fshader-stage=vertex -o "${OUTPUT_DIR}/swapchainVS.sb" "${SHADER_DIR}/swapchainVS.glsl"
-glslc -fshader-stage=fragment -o "${OUTPUT_DIR}/swapchainFS.sb" "${SHADER_DIR}/swapchainFS.glsl"
-
-echo "Finish Shader Compilation！"
+echo "All shaders compiled successfully."

@@ -44,28 +44,31 @@ if(NOT TARGET spdlog)
     add_subdirectory(spdlog)
 endif()
 
-add_library(reflibs INTERFACE)
-target_link_libraries(reflibs INTERFACE stb glfw glm imgui spdlog)
-target_include_directories(reflibs INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/glfw/include)
-
 if(UNIX AND NOT APPLE)
     find_package(Vulkan REQUIRED)
     find_package(X11 REQUIRED)
     find_package(Threads REQUIRED)
+elseif(APPLE)
+    find_package(Vulkan REQUIRED)
+endif()
 
+target_link_libraries(imgui PUBLIC glfw Vulkan::Vulkan)
+target_include_directories(imgui PUBLIC ${Vulkan_INCLUDE_DIRS})
+
+add_library(reflibs INTERFACE)
+target_link_libraries(reflibs INTERFACE stb glfw glm imgui spdlog Vulkan::Vulkan)
+target_include_directories(reflibs INTERFACE
+    ${CMAKE_CURRENT_SOURCE_DIR}/glfw/include
+    ${Vulkan_INCLUDE_DIRS}
+)
+
+if(UNIX AND NOT APPLE)
     target_link_libraries(reflibs INTERFACE
-        Vulkan::Vulkan
         ${X11_LIBRARIES}
         Threads::Threads
     )
-
-    target_include_directories(reflibs INTERFACE
-        ${Vulkan_INCLUDE_DIRS}
-    )
 elseif(APPLE)
-    find_package(Vulkan REQUIRED)
     target_link_libraries(reflibs INTERFACE
-        Vulkan::Vulkan
         "-framework Cocoa"
         "-framework IOKit"
         "-framework CoreVideo"

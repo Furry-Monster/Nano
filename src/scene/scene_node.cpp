@@ -1,136 +1,81 @@
 #include "scene_node.h"
-#include <cstring>
+
 #include "../math/quaternion.h"
-#include "../render/vulkan_rhi.h"
 
-SceneNode::SceneNode() : mScale(1.0f)
-{
-    mbNeedUpdate           = true;
-    mbGeneratedDrawCommand = false;
-    mCachedDrawCommand     = nullptr;
-    mStaticMesh            = nullptr;
-    mUBO                   = nullptr;
-    mUBO1                  = nullptr;
+SceneNode::SceneNode() : mScale(float4(1.0f)) {}
+
+void SceneNode::SetPosition(float x, float y, float z) {
+    mPosition.x = x;
+    mPosition.y = y;
+    mPosition.z = z;
+    mNeedUpdate = true;
 }
 
-void SceneNode::SetPosition(float inX, float inY, float inZ)
-{
-    mPosition.x  = inX;
-    mPosition.y  = inY;
-    mPosition.z  = inZ;
-    mbNeedUpdate = true;
+void SceneNode::SetRotation(float x, float y, float z) {
+    mRotation.x = x;
+    mRotation.y = y;
+    mRotation.z = z;
+    mNeedUpdate = true;
 }
 
-void SceneNode::SetRotation(float inX, float inY, float inZ) {}
-
-void SceneNode::SetScale(float inX, float inY, float inZ)
-{
-    mScale.x     = inX;
-    mScale.y     = inY;
-    mScale.z     = inZ;
-    mbNeedUpdate = true;
+void SceneNode::SetScale(float x, float y, float z) {
+    mScale.x = x;
+    mScale.y = y;
+    mScale.z = z;
+    mNeedUpdate = true;
 }
-static bool sUseCahedCommandBuffer = false;
-void        SceneNode::Draw(VkCommandBuffer inCommandBuffer,
-                     VkRenderPass    inRenderPass,
-                     matrix4&        inProjectionMatrix,
-                     matrix4&        inViewMatrix)
-{
-    if (mbNeedUpdate)
-    {
+
+void SceneNode::Draw(VkCommandBuffer cb, VkRenderPass renderPass, matrix4& projMatrix,
+                     matrix4& viewMatrix) {
+    if (mNeedUpdate) {
         matrix3 scaleMatrix;
         scaleMatrix.LoadIdentity();
         scaleMatrix.SetScale(mScale.x, mScale.y, mScale.z);
-        matrix3 lt3x3 = scaleMatrix * quaternion(mRotation.x, mRotation.y, mRotation.z).toMatrix3();
+        matrix3 lt3x3 =
+            scaleMatrix * quaternion(mRotation.x, mRotation.y, mRotation.z).toMatrix3();
         mModelMatrix.LoadIdentity();
         mModelMatrix.SetLeftTop3x3(lt3x3);
-        mModelMatrix.Tranlate(mPosition.x, mPosition.y, mPosition.z);
+        mModelMatrix.Translate(mPosition.x, mPosition.y, mPosition.z);
         mNormalMatrix = mModelMatrix.Invert();
         mNormalMatrix.Transpose();
-        if (mUBO == nullptr)
-        {
+
+        if (mUBO == nullptr) {
             mUBO = GenBufferObject(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-                                   VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
-                                   nullptr,
+                                   VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, nullptr,
                                    sizeof(matrix4) * 1024);
             mStaticMesh->mMaterial.SetUBO(0, mUBO->mBuffer, sizeof(matrix4) * 1024);
+
             mUBO1 = GenBufferObject(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-                                    VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
-                                    nullptr,
+                                    VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, nullptr,
                                     sizeof(matrix4) * 1024);
             mStaticMesh->mMaterial.SetUBO(1, mUBO1->mBuffer, sizeof(matrix4) * 1024);
         }
+
         {
             VkDevice device = GetVulkanDevice();
-            void*    memPtr = nullptr;
-            vkMapMemory(device, mUBO->mMemory, 0, sizeof(matrix4) * 1024, 0, &memPtr);
-            memcpy(memPtr, &mModelMatrix, sizeof(matrix4));
-            memcpy(((char*)memPtr) + sizeof(matrix4), &mNormalMatrix, sizeof(matrix4));
+            void* mapped = nullptr;
+            vkMapMemory(device, mUBO->mMemory, 0, sizeof(matrix4) * 1024, 0, &mapped);
+            std::memcpy(mapped, &mModelMatrix, sizeof(matrix4));
+            std::memcpy(static_cast<char*>(mapped) + sizeof(matrix4), &mNormalMatrix,
+                        sizeof(matrix4));
             vkUnmapMemory(device, mUBO->mMemory);
         }
+
         {
-            float    ubo1data[] = {1.0f, 0.0f, 0.0f, 0.0f, -1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f};
-            VkDevice device     = GetVulkanDevice();
-            void*    memPtr     = nullptr;
-            vkMapMemory(device, mUBO1->mMemory, 0, sizeof(matrix4) * 1024, 0, &memPtr);
-            memcpy(memPtr, &ubo1data, sizeof(ubo1data));
+            float ubo1data[] = {1.0f, 0.0f, 0.0f, 0.0f, -1.0f, 0.0f,
+                                0.0f, 0.0f, 1.0f,  0.0f, 0.0f, 0.0f};
+            VkDevice device = GetVulkanDevice();
+            void* mapped = nullptr;
+            vkMapMemory(device, mUBO1->mMemory, 0, sizeof(matrix4) * 1024, 0, &mapped);
+            std::memcpy(mapped, ubo1data, sizeof(ubo1data));
             vkUnmapMemory(device, mUBO1->mMemory);
         }
 
-        mbNeedUpdate = false;
+        mNeedUpdate = false;
     }
-    if (sUseCahedCommandBuffer)
-    {
-        GenerateDrawCommand(inProjectionMatrix, inViewMatrix);
-    }
-    else
-    {
-        if (mStaticMesh != nullptr)
-        {
-            mStaticMesh->mMaterial.Active(inCommandBuffer, inRenderPass);
-            mStaticMesh->Draw(inCommandBuffer);
-        }
-    }
-}
-void SceneNode::GenerateDrawCommand(matrix4& inProjectionMatrix, matrix4& inViewMatrix)
-{
-    if (mbGeneratedDrawCommand)
-    {
-        return;
-    }
-    mbGeneratedDrawCommand                           = true;
-    mCachedDrawCommand                               = new VkCommandBuffer[2];
-    VkFramebuffer*              swapChainFrameBuffer = GetSwapChainFrameBuffers();
-    ShaderParameterDescription* parameterDescription = GetUberPassShaderParameterDescription();
-    for (int i = 0; i < 2; i++)
-    {
-        mCachedDrawCommand[i] = CreateCommandBuffer(VK_COMMAND_BUFFER_LEVEL_SECONDARY);
-        VkCommandBufferInheritanceInfo commandBufferInheritanceInfo = {};
-        commandBufferInheritanceInfo.sType                          = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO;
-        commandBufferInheritanceInfo.framebuffer                    = swapChainFrameBuffer[i];
-        commandBufferInheritanceInfo.renderPass                     = GetSwapChainRenderPass();
-        VkCommandBufferBeginInfo commandBufferBeginInfo             = {};
-        commandBufferBeginInfo.sType                                = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-        commandBufferBeginInfo.flags            = VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT; //
-        commandBufferBeginInfo.pInheritanceInfo = &commandBufferInheritanceInfo;
-        vkBeginCommandBuffer(mCachedDrawCommand[i], &commandBufferBeginInfo);
-        vkCmdPushConstants(mCachedDrawCommand[i],
-                           parameterDescription->mPipelineLayout,
-                           VK_SHADER_STAGE_VERTEX_BIT,
-                           0,
-                           sizeof(matrix4),
-                           &inProjectionMatrix);
-        vkCmdPushConstants(mCachedDrawCommand[i],
-                           parameterDescription->mPipelineLayout,
-                           VK_SHADER_STAGE_VERTEX_BIT,
-                           sizeof(matrix4),
-                           sizeof(matrix4),
-                           &inViewMatrix);
-        if (mStaticMesh != nullptr)
-        {
-            mStaticMesh->mMaterial.Active(mCachedDrawCommand[i], nullptr);
-            mStaticMesh->Draw(mCachedDrawCommand[i]);
-        }
-        vkEndCommandBuffer(mCachedDrawCommand[i]);
+
+    if (mStaticMesh != nullptr) {
+        mStaticMesh->mMaterial.Active(cb, renderPass);
+        mStaticMesh->Draw(cb);
     }
 }

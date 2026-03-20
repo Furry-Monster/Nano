@@ -1,48 +1,39 @@
 #include "quaternion.h"
-#include <math.h>
 
-quaternion::quaternion(float inAngleX, float inAngleY, float inAngleZ)
-{
-    float      xAngle = 0.5f * inAngleX * 3.1415926f / 180.0f;
-    float      yAngle = 0.5f * inAngleY * 3.1415926f / 180.0f;
-    float      zAngle = 0.5f * inAngleZ * 3.1415926f / 180.0f;
-    quaternion qRx(cosf(xAngle), sinf(xAngle), 0.0f, 0.0f); //|q|=1
-    quaternion qRy(cosf(yAngle), 0.0f, sinf(yAngle), 0.0f);
-    quaternion qRz(cosf(zAngle), 0.0f, 0.0f, sinf(zAngle));
-    *this = (qRx * qRy) * qRz;
+#include <cmath>
+
+quaternion::quaternion(float angleX, float angleY, float angleZ) {
+    float xRad = 0.5f * angleX * 3.1415926f / 180.0f;
+    float yRad = 0.5f * angleY * 3.1415926f / 180.0f;
+    float zRad = 0.5f * angleZ * 3.1415926f / 180.0f;
+
+    quaternion qx(std::cos(xRad), std::sin(xRad), 0.0f, 0.0f);
+    quaternion qy(std::cos(yRad), 0.0f, std::sin(yRad), 0.0f);
+    quaternion qz(std::cos(zRad), 0.0f, 0.0f, std::sin(zRad));
+    *this = (qx * qy) * qz;
 }
-quaternion::quaternion(float inW, float inX, float inY, float inZ)
-{
-    w = inW;
-    x = inX;
-    y = inY;
-    z = inZ;
+
+quaternion::quaternion(float w, float x, float y, float z) : w(w), x(x), y(y), z(z) {}
+
+void quaternion::operator=(const quaternion& rhs) {
+    w = rhs.w;
+    x = rhs.x;
+    y = rhs.y;
+    z = rhs.z;
 }
-void quaternion::operator=(const quaternion& inR)
-{
-    w = inR.w;
-    x = inR.x;
-    y = inR.y;
-    z = inR.z;
+
+quaternion quaternion::operator*(const quaternion& rhs) const {
+    return quaternion(w * rhs.w - x * rhs.x - y * rhs.y - z * rhs.z,
+                      w * rhs.x + x * rhs.w + y * rhs.z - z * rhs.y,
+                      w * rhs.y + y * rhs.w + z * rhs.x - x * rhs.z,
+                      w * rhs.z + x * rhs.y + z * rhs.w - y * rhs.x);
 }
-quaternion quaternion::operator*(const quaternion& inR) const
-{
-    return quaternion(w * inR.w - x * inR.x - y * inR.y - z * inR.z,
-                      w * inR.x + x * inR.w + y * inR.z - z * inR.y,
-                      w * inR.y + y * inR.w + z * inR.x - x * inR.z,
-                      w * inR.z + x * inR.y + z * inR.w - y * inR.x);
-}
-matrix3 quaternion::toMatrix3() const
-{
-    float   xx = x * x;
-    float   yy = y * y;
-    float   zz = z * z;
-    float   xy = x * y;
-    float   xz = x * z;
-    float   yz = y * z;
-    float   wx = w * x;
-    float   wy = w * y;
-    float   wz = w * z;
+
+matrix3 quaternion::toMatrix3() const {
+    float xx = x * x, yy = y * y, zz = z * z;
+    float xy = x * y, xz = x * z, yz = y * z;
+    float wx = w * x, wy = w * y, wz = w * z;
+
     matrix3 m;
     m._11 = 1.0f - 2.0f * yy - 2.0f * zz;
     m._12 = 2.0f * xy + 2.0f * wz;

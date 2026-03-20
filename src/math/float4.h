@@ -1,36 +1,42 @@
 #pragma once
 
-class float4
-{
+#include <cmath>
+#include <cstring>
+
+class float4 {
 public:
-    union
-    {
-        struct
-        {
+    union {
+        struct {
             float x, y, z, w;
         };
         float v[4];
     };
+
     float4() : x(0.0f), y(0.0f), z(0.0f), w(0.0f) {}
-    float4(float inValue) : x(inValue), y(inValue), z(inValue), w(inValue) {}
-    float4(float* inData) : x(inData[0]), y(inData[1]), z(inData[2]), w(inData[3]) {}
-    float4(float inX, float inY, float inZ, float inW = 1.0f) : x(inX), y(inY), z(inZ), w(inW) {}
-    float4(const float4& inV) : x(inV.x), y(inV.y), z(inV.z), w(inV.w) {}
-    float& operator[](int inIndex) { return v[inIndex]; }
-    void   operator=(const float4& inV);
-    void   operator*=(float inScalar);
-    void   operator-=(float inScalar);
-    void   operator/=(float inScalar);
-    void   operator+=(float inScalar);
-    float4 operator+(const float4& inV) const;
-    float4 operator-(const float4& inV) const;
-    float4 operator*(float inScalar) const;
-    void   Normalize();
+    explicit float4(float val) : x(val), y(val), z(val), w(val) {}
+    explicit float4(float* data) : x(data[0]), y(data[1]), z(data[2]), w(data[3]) {}
+    float4(float ix, float iy, float iz, float iw = 1.0f) : x(ix), y(iy), z(iz), w(iw) {}
+    float4(const float4& v) : x(v.x), y(v.y), z(v.z), w(v.w) {}
+
+    float& operator[](int index) { return v[index]; }
+
+    void operator=(const float4& rhs);
+    void operator*=(float scalar);
+    void operator-=(float scalar);
+    void operator/=(float scalar);
+    void operator+=(float scalar);
+
+    float4 operator+(const float4& rhs) const;
+    float4 operator-(const float4& rhs) const;
+    float4 operator*(float scalar) const;
+
+    void Normalize();
 };
-float  MinValue(float inA, float inB);
-float  MaxValue(float inA, float inB);
-float4 Min(const float4& inA, const float4& inB);
-float4 Max(const float4& inA, const float4& inB);
-float4 cross(const float4& inA, const float4& inB);
-float  dot3(const float4& inA, const float4& inB);
-float  dot4(const float4& inA, const float4& inB);
+
+float MinValue(float a, float b);
+float MaxValue(float a, float b);
+float4 Min(const float4& a, const float4& b);
+float4 Max(const float4& a, const float4& b);
+float4 cross(const float4& a, const float4& b);
+float dot3(const float4& a, const float4& b);
+float dot4(const float4& a, const float4& b);
