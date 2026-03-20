@@ -1,7 +1,7 @@
 #pragma once
 
-#include "../math/matrix4.h"
-#include "../render/static_mesh.h"
+#include "math/matrix4.h"
+#include "render/static_mesh.h"
 
 class SceneNode {
 public:

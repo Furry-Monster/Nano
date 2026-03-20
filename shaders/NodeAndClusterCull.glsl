@@ -40,8 +40,8 @@ layout(binding = 5) uniform GlobalConstants {
     mat4 mProjectionMatrix;
     mat4 mViewMatrix;
     mat4 mModelMatrix;
-    uvec4 mMisc0;          // x: Manual MipLevel
-    vec4 mNanite_ViewOrigin;  // xyz: camera pos, w: lodScale
+    uvec4 mMisc0; // x: Manual MipLevel
+    vec4 mNanite_ViewOrigin; // xyz: camera pos, w: lodScale
     vec4 mNanite_ViewForward; // xyz: view dir, w: lodScaleHW
 } U_GlobalConstants;
 
@@ -56,18 +56,18 @@ uint BitFieldExtractU32(uint Data, uint Size, uint Offset) {
 }
 
 struct FHierarchyNodeSlice {
-    vec4  LODBounds;
-    vec3  BoxBoundsCenter;
-    vec3  BoxBoundsExtent;
+    vec4 LODBounds;
+    vec3 BoxBoundsCenter;
+    vec3 BoxBoundsExtent;
     float MinLODError;
     float MaxParentLODError;
-    uint  ChildStartReference;
-    uint  NumChildren;
-    uint  StartPageIndex;
-    uint  NumPages;
-    bool  bEnabled;
-    bool  bLoaded;
-    bool  bLeaf;
+    uint ChildStartReference;
+    uint NumChildren;
+    uint StartPageIndex;
+    uint NumPages;
+    bool bEnabled;
+    bool bLoaded;
+    bool bLeaf;
 };
 
 FHierarchyNodeSlice UnpackHierarchyNodeSlice(
@@ -75,27 +75,27 @@ FHierarchyNodeSlice UnpackHierarchyNodeSlice(
 ) {
     const uvec4 Misc0 = RawData1;
     const uvec4 Misc1 = RawData2;
-    const uint  Misc2 = RawData3;
+    const uint Misc2 = RawData3;
 
     FHierarchyNodeSlice Node;
-    Node.LODBounds           = uintBitsToFloat(RawData0);
-    Node.BoxBoundsCenter     = uintBitsToFloat(Misc0.xyz);
-    Node.BoxBoundsExtent     = uintBitsToFloat(Misc1.xyz);
+    Node.LODBounds = uintBitsToFloat(RawData0);
+    Node.BoxBoundsCenter = uintBitsToFloat(Misc0.xyz);
+    Node.BoxBoundsExtent = uintBitsToFloat(Misc1.xyz);
 
-    vec2 unpacked2Half       = unpackHalf2x16(Misc0.w);
-    Node.MinLODError         = unpacked2Half.x;
-    Node.MaxParentLODError   = unpacked2Half.y;
+    vec2 unpacked2Half = unpackHalf2x16(Misc0.w);
+    Node.MinLODError = unpacked2Half.x;
+    Node.MaxParentLODError = unpacked2Half.y;
     Node.ChildStartReference = Misc1.w;
-    Node.bLoaded             = (Misc1.w != 0xFFFFFFFFu);
+    Node.bLoaded = (Misc1.w != 0xFFFFFFFFu);
 
-    Node.NumChildren   = BitFieldExtractU32(Misc2, NANITE_MAX_CLUSTERS_PER_GROUP_BITS, 0);
-    Node.NumPages      = BitFieldExtractU32(Misc2, NANITE_MAX_GROUP_PARTS_BITS,
-                                            NANITE_MAX_CLUSTERS_PER_GROUP_BITS);
+    Node.NumChildren = BitFieldExtractU32(Misc2, NANITE_MAX_CLUSTERS_PER_GROUP_BITS, 0);
+    Node.NumPages = BitFieldExtractU32(Misc2, NANITE_MAX_GROUP_PARTS_BITS,
+            NANITE_MAX_CLUSTERS_PER_GROUP_BITS);
     Node.StartPageIndex = BitFieldExtractU32(Misc2, NANITE_MAX_RESOURCE_PAGES_BITS,
-                                             NANITE_MAX_CLUSTERS_PER_GROUP_BITS +
-                                             NANITE_MAX_GROUP_PARTS_BITS);
+            NANITE_MAX_CLUSTERS_PER_GROUP_BITS +
+                NANITE_MAX_GROUP_PARTS_BITS);
     Node.bEnabled = Misc2 != 0u;
-    Node.bLeaf    = Misc2 != 0xFFFFFFFFu;
+    Node.bLeaf = Misc2 != 0xFFFFFFFFu;
 
     return Node;
 }
@@ -105,21 +105,21 @@ FHierarchyNodeSlice GetHierarchyNodeSlice(uint NodeIndex, uint ChildIndex) {
 
     uint i = BaseAddress + 4 * ChildIndex;
     const uvec4 RawData0 = uvec4(
-        BVHBuffer.mData[i], BVHBuffer.mData[i + 1],
-        BVHBuffer.mData[i + 2], BVHBuffer.mData[i + 3]
-    );
+            BVHBuffer.mData[i], BVHBuffer.mData[i + 1],
+            BVHBuffer.mData[i + 2], BVHBuffer.mData[i + 3]
+        );
 
     i = BaseAddress + 16 + ChildIndex * 4;
     const uvec4 RawData1 = uvec4(
-        BVHBuffer.mData[i], BVHBuffer.mData[i + 1],
-        BVHBuffer.mData[i + 2], BVHBuffer.mData[i + 3]
-    );
+            BVHBuffer.mData[i], BVHBuffer.mData[i + 1],
+            BVHBuffer.mData[i + 2], BVHBuffer.mData[i + 3]
+        );
 
     i = BaseAddress + 32 + ChildIndex * 4;
     const uvec4 RawData2 = uvec4(
-        BVHBuffer.mData[i], BVHBuffer.mData[i + 1],
-        BVHBuffer.mData[i + 2], BVHBuffer.mData[i + 3]
-    );
+            BVHBuffer.mData[i], BVHBuffer.mData[i + 1],
+            BVHBuffer.mData[i + 2], BVHBuffer.mData[i + 3]
+        );
 
     i = BaseAddress + 48 + ChildIndex;
     const uint RawData3 = BVHBuffer.mData[i];
@@ -133,11 +133,11 @@ bool ShouldVisitChild(FHierarchyNodeSlice slice) {
 
 void main() {
     uint nodeOffset = CurrentWorkArgs.mData[5];
-    uint nodeCount  = CurrentWorkArgs.mData[6];
+    uint nodeCount = CurrentWorkArgs.mData[6];
 
     uint nextNodeOffsetInBuffer = nodeOffset + nodeCount;
-    uint nodeOutputOffset       = nextNodeOffsetInBuffer;
-    uint nextNodeCount          = 0;
+    uint nodeOutputOffset = nextNodeOffsetInBuffer;
+    uint nextNodeCount = 0;
 
     uint clusterOutputOffset = CurrentWorkArgs.mData[1];
 
@@ -163,10 +163,10 @@ void main() {
 
                         for (uint j = 0u; j < clusterCountInLeafNode; j++) {
                             MainAndPostNodeAndClusterBatches
-                                .mData[1024 + clusterOutputOffset * 2] = pageIndex;
+                            .mData[1024 + clusterOutputOffset * 2] = pageIndex;
                             MainAndPostNodeAndClusterBatches
-                                .mData[1024 + clusterOutputOffset * 2 + 1] =
-                                    clusterOffsetInPage + j;
+                            .mData[1024 + clusterOutputOffset * 2 + 1] =
+                                clusterOffsetInPage + j;
                             clusterOutputOffset++;
                         }
                     }

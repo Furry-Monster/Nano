@@ -2,6 +2,7 @@
 
 #include <cstdio>
 #include <cstring>
+#include <vulkan/vulkan_core.h>
 
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
@@ -106,9 +107,12 @@ static bool InitInstance() {
 }
 
 static VKAPI_ATTR VkBool32 VKAPI_CALL DebugReportCallback(
-    VkDebugReportFlagsEXT flags, VkDebugReportObjectTypeEXT /*objectType*/,
-    uint64_t /*object*/, size_t /*location*/, int32_t /*messageCode*/,
-    const char * /*pLayerPrefix*/, const char *pMessage, void * /*pUserData*/) {
+    VkDebugReportFlagsEXT flags,
+    [[maybe_unused]] VkDebugReportObjectTypeEXT objectType,
+    [[maybe_unused]] uint64_t object, [[maybe_unused]] size_t location,
+    [[maybe_unused]] int32_t messageCode,
+    [[maybe_unused]] const char *pLayerPrefix,
+    [[maybe_unused]] const char *pMessage, [[maybe_unused]] void *pUserData) {
   if (flags & VK_DEBUG_REPORT_ERROR_BIT_EXT) {
     spdlog::error("[Vulkan] {}", pMessage);
   } else {
@@ -163,7 +167,7 @@ static bool InitPhysicalDevice() {
 
         VkPhysicalDeviceProperties props;
         vkGetPhysicalDeviceProperties(device, &props);
-        spdlog::info("GPU: {}", props.deviceName);
+        spdlog::info("GPU-{}: {}", props.deviceID, props.deviceName);
         return true;
       }
     }
@@ -218,6 +222,9 @@ static bool InitLogicDevice() {
 
   vkGetDeviceQueue(sDevice, sGraphicQueueFamily, 0, &sGraphicQueue);
   vkGetDeviceQueue(sDevice, sPresentQueueFamily, 0, &sPresentQueue);
+  spdlog::info("Queue mode: {}", sPresentQueueFamily == sGraphicQueueFamily
+                                     ? "Shared"
+                                     : "Separate");
   return true;
 }
 
@@ -339,12 +346,14 @@ static void InitSwapChainRenderPass() {
   rpInfo.pAttachments = attachments;
   rpInfo.subpassCount = 1;
   rpInfo.pSubpasses = &subpass;
+
   vkCreateRenderPass(sDevice, &rpInfo, nullptr, &sSwapChainRenderPass);
 }
 
 static void InitSwapChainFBOs() {
   for (int i = 0; i < 2; i++) {
     VkImageView views[] = {sSwapChainImageViews[i], sDepthBuffer->mImageView};
+
     VkFramebufferCreateInfo fbInfo = {};
     fbInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
     fbInfo.renderPass = sSwapChainRenderPass;
@@ -353,6 +362,7 @@ static void InitSwapChainFBOs() {
     fbInfo.width = sCanvasWidth;
     fbInfo.height = sCanvasHeight;
     fbInfo.layers = 1;
+
     vkCreateFramebuffer(sDevice, &fbInfo, nullptr, &sSwapChainFBOs[i]);
   }
 }
@@ -361,7 +371,15 @@ static void InitCommandPool() {
   VkCommandPoolCreateInfo poolInfo = {};
   poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
   poolInfo.queueFamilyIndex = sGraphicQueueFamily;
+
   vkCreateCommandPool(sDevice, &poolInfo, nullptr, &sCommandPool);
+}
+
+static void InitSemaphores() {
+  VkSemaphoreCreateInfo semInfo = {};
+  semInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+  vkCreateSemaphore(sDevice, &semInfo, nullptr, &sReadyToRender);
+  vkCreateSemaphore(sDevice, &semInfo, nullptr, &sReadyToPresent);
 }
 
 static void InitUberPassPipelineLayout() {
@@ -446,12 +464,7 @@ bool InitVulkan(GLFWwindow *window, int canvasWidth, int canvasHeight) {
   InitSwapChainRenderPass();
   InitSwapChainFBOs();
   InitCommandPool();
-
-  VkSemaphoreCreateInfo semInfo = {};
-  semInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-  vkCreateSemaphore(sDevice, &semInfo, nullptr, &sReadyToRender);
-  vkCreateSemaphore(sDevice, &semInfo, nullptr, &sReadyToPresent);
-
+  InitSemaphores();
   InitUberPassPipelineLayout();
 
   spdlog::info("Vulkan initialized: {}x{}", canvasWidth, canvasHeight);
@@ -470,6 +483,8 @@ VulkanBuffer *GenBufferObject(VkBufferUsageFlags usage,
   if (vkCreateBuffer(sDevice, &bufInfo, nullptr, &buffer->mBuffer) !=
       VK_SUCCESS) {
     spdlog::error("Failed to create buffer");
+    delete buffer;
+    return nullptr;
   }
 
   VkMemoryRequirements memReqs;
@@ -664,7 +679,7 @@ CreatePSO(VkRenderPass renderPass, VkPrimitiveTopology topology,
   VkPipelineDynamicStateCreateInfo dynamicState = {};
   dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
 
-  // Flip viewport Y for Vulkan coordinate system
+  // Note: flip viewport Y for Vulkan coordinate
   VkViewport viewport = {};
   viewport.x = 0.0f;
   viewport.y = static_cast<float>(sCanvasHeight);
@@ -793,6 +808,7 @@ void TransferImageLayout(VkCommandBuffer cb, VkImage image,
   barrier.dstAccessMask = newAccess;
   barrier.image = image;
   barrier.subresourceRange = subresourceRange;
+
   vkCmdPipelineBarrier(cb, oldStage, newStage, 0, 0, nullptr, 0, nullptr, 1,
                        &barrier);
 }

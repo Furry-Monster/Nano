@@ -21,10 +21,10 @@ uint MurmurMix(uint Hash) {
 vec3 IntToColor(uint Index) {
     uint Hash = MurmurMix(Index);
     vec3 Color = vec3(
-        (Hash >> 0) & 255,
-        (Hash >> 8) & 255,
-        (Hash >> 16) & 255
-    );
+            (Hash >> 0) & 255,
+            (Hash >> 8) & 255,
+            (Hash >> 16) & 255
+        );
     return Color * (1.0 / 255.0);
 }
 

@@ -1,7 +1,7 @@
 #pragma once
 
-#include "../math/float4.h"
 #include "material.h"
+#include "math/float4.h"
 #include "vulkan_rhi.h"
 
 #include <vector>

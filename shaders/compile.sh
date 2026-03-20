@@ -12,7 +12,7 @@ glslc -fshader-stage=compute -o ClusterCull.sb ClusterCull.glsl
 glslc -fshader-stage=compute -o Visualize.sb Visualize.glsl
 glslc -fshader-stage=vertex -o HWRasterizeVS.sb HWRasterizeVS.glsl
 glslc -fshader-stage=fragment -o HWRasterizeFS.sb HWRasterizeFS.glsl
-glslc -fshader-stage=vertex -o swapchainVS.sb swapchainVS.glsl
-glslc -fshader-stage=fragment -o swapchainFS.sb swapchainFS.glsl
+glslc -fshader-stage=vertex -o SwapchainVS.sb SwapchainVS.glsl
+glslc -fshader-stage=fragment -o SwapchainFS.sb SwapchainFS.glsl
 
 echo "All shaders compiled successfully."

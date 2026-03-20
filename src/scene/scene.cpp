@@ -1,10 +1,10 @@
 #include "scene.h"
 
-#include "../math/matrix4.h"
-#include "../math/quaternion.h"
-#include "../render/render_pass.h"
-#include "../render/static_mesh.h"
-#include "../render/vulkan_rhi.h"
+#include "math/matrix4.h"
+#include "math/quaternion.h"
+#include "render/render_pass.h"
+#include "render/static_mesh.h"
+#include "render/vulkan_rhi.h"
 #include "scene_node.h"
 
 #include <GLFW/glfw3.h>
@@ -255,7 +255,7 @@ void InitScene(int canvasWidth, int canvasHeight) {
         VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
         mesh->mVertexData, sizeof(StaticMeshVertex) * 4);
     sFSQNode->mStaticMesh = mesh;
-    mesh->mMaterial.Init("shaders/swapchainVS.sb", "shaders/swapchainFS.sb");
+    mesh->mMaterial.Init("shaders/SwapchainVS.sb", "shaders/SwapchainFS.sb");
     mesh->mMaterial.mPrimitiveType = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
     mesh->mMaterial.SetTexture2D(2, 0, sVisualizationTexture->mImageView,
                                  GenSampler());

@@ -28,9 +28,9 @@ int main() {
   glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
   glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
 
-  GLFWwindow *window = glfwCreateWindow(
-      kWindowWidth, kWindowHeight, "Nano - Virtual Geometry", nullptr, nullptr);
-  if (window == nullptr) {
+  GLFWwindow *window =
+      glfwCreateWindow(kWindowWidth, kWindowHeight, "Nano", nullptr, nullptr);
+  if (!window) {
     spdlog::error("Failed to create GLFW window");
     glfwTerminate();
     return -1;
@@ -49,7 +49,7 @@ int main() {
 
   auto lastTime = std::chrono::high_resolution_clock::now();
 
-  while (!static_cast<bool>(glfwWindowShouldClose(window))) {
+  while (!glfwWindowShouldClose(window)) {
     glfwPollEvents();
 
     auto currentTime = std::chrono::high_resolution_clock::now();

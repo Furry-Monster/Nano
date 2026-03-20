@@ -83,8 +83,9 @@ VkFramebuffer *GetSwapChainFrameBuffers();
 
 void TransferImageLayout(VkCommandBuffer cb, VkImage image,
                          VkImageSubresourceRange subresourceRange,
-                         VkImageLayout oldLayout, VkAccessFlags oldAccess,
-                         VkPipelineStageFlags oldStage, VkImageLayout newLayout,
+                         VkImageLayout oldLayout, // old
+                         VkAccessFlags oldAccess, VkPipelineStageFlags oldStage,
+                         VkImageLayout newLayout, // new
                          VkAccessFlags newAccess,
                          VkPipelineStageFlags newStage);
 

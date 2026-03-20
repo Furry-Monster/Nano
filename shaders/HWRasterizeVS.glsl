@@ -5,7 +5,7 @@ layout(binding = 0) uniform GlobalConstants {
     mat4 mViewMatrix;
     mat4 mModelMatrix;
     uvec4 mMisc0;
-    vec4 mNanite_ViewOrigin;  // xyz: camera pos, w: lodScale
+    vec4 mNanite_ViewOrigin; // xyz: camera pos, w: lodScale
     vec4 mNanite_ViewForward; // xyz: view dir, w: lodScaleHW
 } U_GlobalConstants;
 
@@ -45,11 +45,11 @@ ClusterInfo GetClusterInfo(uint inPageIndex, uint inClusterIndex) {
     uint clusterIndexCount = ClusterPageData.mData[clusterBaseOffset + 1u];
 
     uvec4 lodBounds = uvec4(
-        ClusterPageData.mData[clusterBaseOffset + 2u],
-        ClusterPageData.mData[clusterBaseOffset + 3u],
-        ClusterPageData.mData[clusterBaseOffset + 4u],
-        ClusterPageData.mData[clusterBaseOffset + 5u]
-    );
+            ClusterPageData.mData[clusterBaseOffset + 2u],
+            ClusterPageData.mData[clusterBaseOffset + 3u],
+            ClusterPageData.mData[clusterBaseOffset + 4u],
+            ClusterPageData.mData[clusterBaseOffset + 5u]
+        );
 
     uint lodErrorAndEdgeLength = ClusterPageData.mData[clusterBaseOffset + 6u];
 
@@ -83,10 +83,10 @@ void main() {
         currentClusterPositionDataOffsetBase + currentIndexInCluster * 3u;
 
     vec3 positionMS = uintBitsToFloat(uvec3(
-        ClusterPageData.mData[currentVertexPositionDataOffset],
-        ClusterPageData.mData[currentVertexPositionDataOffset + 1],
-        ClusterPageData.mData[currentVertexPositionDataOffset + 2]
-    ));
+                ClusterPageData.mData[currentVertexPositionDataOffset],
+                ClusterPageData.mData[currentVertexPositionDataOffset + 1],
+                ClusterPageData.mData[currentVertexPositionDataOffset + 2]
+            ));
 
     vec4 positionCS = vec4(0.0, 0.0, 0.0, 0.0);
     if (vertexIndex < info.mIndexCount) {

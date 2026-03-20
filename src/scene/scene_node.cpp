@@ -1,6 +1,6 @@
 #include "scene_node.h"
 
-#include "../math/quaternion.h"
+#include "math/quaternion.h"
 
 SceneNode::SceneNode() : mScale(float4(1.0f)) {}
 
@@ -26,7 +26,8 @@ void SceneNode::SetScale(float x, float y, float z) {
 }
 
 void SceneNode::Draw(VkCommandBuffer cb, VkRenderPass renderPass,
-                     matrix4 &projMatrix, matrix4 &viewMatrix) {
+                     [[maybe_unused]] matrix4 &projMatrix,
+                     [[maybe_unused]] matrix4 &viewMatrix) {
   if (mNeedUpdate) {
     matrix3 scaleMatrix;
     scaleMatrix.LoadIdentity();

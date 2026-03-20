@@ -1,6 +1,6 @@
 #pragma once
 
-#include "vulkan_rhi.h"
+#include <vulkan/vulkan_core.h>
 
 class Material {
 public:
@@ -12,6 +12,7 @@ public:
   VkPrimitiveTopology mPrimitiveType = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 
   Material() = default;
+  ~Material() noexcept = default;
 
   void Init(const char *vsPath, const char *fsPath);
   void SetUBO(int binding, VkBuffer ubo, int uboSize);
