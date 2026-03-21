@@ -1,5 +1,6 @@
 #include "vulkan_rhi.h"
 
+#include <cstdint>
 #include <cstdio>
 #include <cstring>
 #include <vulkan/vulkan_core.h>
@@ -29,6 +30,7 @@ static VkFramebuffer sSwapChainFBOs[2];
 static VkCommandPool sCommandPool = VK_NULL_HANDLE;
 static VkSemaphore sReadyToRender = VK_NULL_HANDLE;
 static VkSemaphore sReadyToPresent = VK_NULL_HANDLE;
+static VkFence sInFlightFence = VK_NULL_HANDLE;
 static uint32_t sCurrentFrameIndex = 0;
 static uint32_t sCanvasWidth = 1280;
 static uint32_t sCanvasHeight = 720;
@@ -351,7 +353,8 @@ static void InitSwapChainRenderPass() {
 }
 
 static void InitSwapChainFBOs() {
-  for (int i = 0; i < 2; i++) {
+  const auto imageCnt = static_cast<uint32_t>(sSwapChainImageViews.size());
+  for (uint32_t i = 0; i < imageCnt; i++) {
     VkImageView views[] = {sSwapChainImageViews[i], sDepthBuffer->mImageView};
 
     VkFramebufferCreateInfo fbInfo = {};
@@ -375,11 +378,16 @@ static void InitCommandPool() {
   vkCreateCommandPool(sDevice, &poolInfo, nullptr, &sCommandPool);
 }
 
-static void InitSemaphores() {
+static void InitSyncResources() {
   VkSemaphoreCreateInfo semInfo = {};
   semInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
   vkCreateSemaphore(sDevice, &semInfo, nullptr, &sReadyToRender);
   vkCreateSemaphore(sDevice, &semInfo, nullptr, &sReadyToPresent);
+
+  VkFenceCreateInfo fenceInfo = {};
+  fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+  fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+  vkCreateFence(sDevice, &fenceInfo, nullptr, &sInFlightFence);
 }
 
 static void InitUberPassPipelineLayout() {
@@ -464,7 +472,7 @@ bool InitVulkan(GLFWwindow *window, int canvasWidth, int canvasHeight) {
   InitSwapChainRenderPass();
   InitSwapChainFBOs();
   InitCommandPool();
-  InitSemaphores();
+  InitSyncResources();
   InitUberPassPipelineLayout();
 
   spdlog::info("Vulkan initialized: {}x{}", canvasWidth, canvasHeight);
@@ -536,6 +544,9 @@ void BeginCommandBuffer(VkCommandBuffer cb,
 }
 
 uint32_t BeginSwapChainRenderPass(VkCommandBuffer cb) {
+  vkWaitForFences(sDevice, 1, &sInFlightFence, VK_TRUE, UINT64_MAX);
+  vkResetFences(sDevice, 1, &sInFlightFence);
+
   vkAcquireNextImageKHR(sDevice, sSwapChain, UINT64_MAX, sReadyToRender,
                         VK_NULL_HANDLE, &sCurrentFrameIndex);
 
@@ -571,7 +582,7 @@ void EndSwapChainRenderPass(VkCommandBuffer cb) {
   submitInfo.pWaitDstStageMask = &waitStage;
   submitInfo.signalSemaphoreCount = 1;
   submitInfo.pSignalSemaphores = &sReadyToPresent;
-  vkQueueSubmit(sGraphicQueue, 1, &submitInfo, VK_NULL_HANDLE);
+  vkQueueSubmit(sGraphicQueue, 1, &submitInfo, sInFlightFence);
 
   VkPresentInfoKHR presentInfo = {};
   presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;

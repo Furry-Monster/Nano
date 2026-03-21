@@ -25,7 +25,6 @@ target_link_libraries(Nano PRIVATE reflibs)
 add_dependencies(Nano copy_resources)
 
 # Command-line model exporter:
-# output -> .bvh (hierarchy) + .nanitemesh (page/cluster data) for the Nano shaders.
 add_executable(NaniteExporter
     exporter/main.cpp
     exporter/args.cpp

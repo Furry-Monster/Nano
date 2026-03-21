@@ -46,11 +46,14 @@ static unsigned char *LoadFileContent(const char *path, size_t &outSize) {
     outSize = 0;
     return nullptr;
   }
+
   std::fseek(file, 0, SEEK_END);
   outSize = std::ftell(file);
   std::fseek(file, 0, SEEK_SET);
+
   auto *content = new unsigned char[outSize];
   std::fread(content, 1, outSize, file);
+
   std::fclose(file);
   return content;
 }
@@ -265,13 +268,13 @@ void InitScene(int canvasWidth, int canvasHeight) {
 }
 
 void RenderOneFrame([[maybe_unused]] float frameTime) {
+  // submit pub-constant first.
   BufferSubData(sGlobalConstantsBuffer, &sGlobalConstantsData,
                 sizeof(GlobalConstants));
 
   sInitPass->Execute();
-  for (const auto &sNodeAndClusterCullPass : sNodeAndClusterCullPasses) {
+  for (const auto &sNodeAndClusterCullPass : sNodeAndClusterCullPasses)
     sNodeAndClusterCullPass->Execute();
-  }
   sClusterCullPass->Execute();
   sHWRasterizePass->ExecuteIndirect(sWorkArgsBuffer[0]);
   sVisualizePass->Execute();
