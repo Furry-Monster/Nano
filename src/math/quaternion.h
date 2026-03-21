@@ -9,7 +9,12 @@ public:
   quaternion(float angleX, float angleY, float angleZ);
   quaternion(float w, float x, float y, float z);
 
-  void operator=(const quaternion &rhs);
+  quaternion(const quaternion &other);
+  quaternion(quaternion &&other) noexcept;
+
+  quaternion &operator=(const quaternion &rhs);
+  quaternion &operator=(quaternion &&rhs) noexcept;
+
   quaternion operator*(const quaternion &rhs) const;
   matrix3 toMatrix3() const;
 };

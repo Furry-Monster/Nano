@@ -16,11 +16,42 @@ quaternion::quaternion(float angleX, float angleY, float angleZ) {
 quaternion::quaternion(float w, float x, float y, float z)
     : w(w), x(x), y(y), z(z) {}
 
-void quaternion::operator=(const quaternion &rhs) {
+quaternion::quaternion(const quaternion &other) {
+  w = other.w;
+  x = other.x;
+  y = other.y;
+  z = other.z;
+}
+
+quaternion::quaternion(quaternion &&other) noexcept {
+  w = other.w;
+  x = other.x;
+  y = other.y;
+  z = other.z;
+}
+
+quaternion &quaternion::operator=(const quaternion &rhs) {
+  if (this == &rhs)
+    return *this;
+
   w = rhs.w;
   x = rhs.x;
   y = rhs.y;
   z = rhs.z;
+
+  return *this;
+}
+
+quaternion &quaternion::operator=(quaternion &&rhs) noexcept {
+  if (this == &rhs)
+    return *this;
+
+  w = rhs.w;
+  x = rhs.x;
+  y = rhs.y;
+  z = rhs.z;
+
+  return *this;
 }
 
 quaternion quaternion::operator*(const quaternion &rhs) const {
