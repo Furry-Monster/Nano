@@ -300,29 +300,51 @@ void InitScene(int canvasWidth, int canvasHeight) {
 }
 
 void RenderOneFrame([[maybe_unused]] float frameTime) {
-  // submit pub-constant first.
   BufferSubData(sGlobalConstantsBuffer, &sGlobalConstantsData,
                 sizeof(GlobalConstants));
 
-  sInitPass->Execute();
-  for (const auto &sNodeAndClusterCullPass : sNodeAndClusterCullPasses)
-    sNodeAndClusterCullPass->Execute();
-  sClusterCullPass->Execute();
-  sHWRasterizePass->ExecuteIndirect(sWorkArgsBuffer[0]);
-  sVisualizePass->Execute();
+  uint32_t imageIndex = 0;
+  if (!PrepareSwapChainFrame(&imageIndex))
+    return;
 
   VkCommandBuffer cb = CreateCommandBuffer();
-  if (cb == VK_NULL_HANDLE) {
+  if (cb == VK_NULL_HANDLE)
     return;
-  }
+
   BeginCommandBuffer(cb, VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
+
+  sInitPass->UpdateDescriptorSets();
+  sInitPass->RecordComputeCommands(cb);
+  CmdBarrierAfterComputeWrites(cb);
+
+  for (auto *pass : sNodeAndClusterCullPasses) {
+    pass->UpdateDescriptorSets();
+    pass->RecordComputeCommands(cb);
+    CmdBarrierAfterComputeWrites(cb);
+  }
+
+  sClusterCullPass->UpdateDescriptorSets();
+  sClusterCullPass->RecordComputeCommands(cb);
+  CmdBarrierComputeToIndirectAndDraw(cb);
+
+  sHWRasterizePass->UpdateDescriptorSets();
+  sHWRasterizePass->RecordGraphicsIndirectCommands(cb, sWorkArgsBuffer[0]);
+  CmdBarrierFragmentStorageToCompute(cb);
+
+  sVisualizePass->UpdateDescriptorSets();
+  sVisualizePass->RecordComputeCommands(cb);
+  CmdBarrierComputeToFragmentSample(cb);
+
   {
     SCOPED_EVENT(cb, "SwapChain");
-    BeginSwapChainRenderPass(cb);
+    CmdBeginSwapChainRenderPass(cb, imageIndex);
     sFSQNode->Draw(cb, GetSwapChainRenderPass(), sProjectionMatrix,
                    sViewMatrix);
+    vkCmdEndRenderPass(cb);
   }
-  EndSwapChainRenderPass(cb);
+
+  vkEndCommandBuffer(cb);
+  SubmitAndPresentSwapChainFrame(cb, imageIndex);
 }
 
 void OnKeyUp(int keyCode) {

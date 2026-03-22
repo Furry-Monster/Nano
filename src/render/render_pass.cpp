@@ -269,6 +269,67 @@ void RenderPass::Build(uint32_t canvasWidth, uint32_t canvasHeight) {
   }
 }
 
+void RenderPass::UpdateDescriptorSets() {
+  VkDevice device = GetVulkanDevice();
+  vkUpdateDescriptorSets(device,
+                         static_cast<uint32_t>(mWriteDescriptorSets.size()),
+                         mWriteDescriptorSets.data(), 0, nullptr);
+}
+
+void RenderPass::RecordComputeCommands(VkCommandBuffer cb) {
+  if (mType != RenderPassType::Compute) {
+    return;
+  }
+
+  SCOPED_EVENT(cb, mName.c_str());
+
+  for (auto *tex : mOutputTextures) {
+    VkImageSubresourceRange range = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+    TransferImageLayout(cb, tex->mImage, range, VK_IMAGE_LAYOUT_UNDEFINED,
+                        VK_ACCESS_NONE, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                        VK_IMAGE_LAYOUT_GENERAL, VK_ACCESS_SHADER_WRITE_BIT,
+                        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
+  }
+
+  vkCmdBindPipeline(cb, VK_PIPELINE_BIND_POINT_COMPUTE, mPSO);
+  vkCmdBindDescriptorSets(cb, VK_PIPELINE_BIND_POINT_COMPUTE, mPipelineLayout,
+                          0, 1, &mDescriptorSet, 0, nullptr);
+  vkCmdDispatch(cb, mDispatchX, mDispatchY, mDispatchZ);
+
+  for (auto *tex : mOutputTextures) {
+    VkImageSubresourceRange range = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+    TransferImageLayout(
+        cb, tex->mImage, range, VK_IMAGE_LAYOUT_GENERAL,
+        VK_ACCESS_SHADER_WRITE_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_ACCESS_SHADER_READ_BIT,
+        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
+  }
+}
+
+void RenderPass::RecordGraphicsIndirectCommands(VkCommandBuffer cb,
+                                                VulkanBuffer *indirectBuffer) {
+  SCOPED_EVENT(cb, mName.c_str());
+
+  VkClearValue clearValues[2];
+  clearValues[0].color = {{0.0f, 0.0f, 0.0f, 1.0f}};
+  clearValues[1].depthStencil = {1.0f, 0};
+
+  VkRenderPassBeginInfo rpBegin = {};
+  rpBegin.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+  rpBegin.renderPass = mRenderPass;
+  rpBegin.framebuffer = mFrameBuffer;
+  rpBegin.clearValueCount = 2;
+  rpBegin.pClearValues = clearValues;
+  rpBegin.renderArea.extent = {mViewportWidth, mViewportHeight};
+
+  vkCmdBeginRenderPass(cb, &rpBegin, VK_SUBPASS_CONTENTS_INLINE);
+  vkCmdBindPipeline(cb, VK_PIPELINE_BIND_POINT_GRAPHICS, mPSO);
+  vkCmdBindDescriptorSets(cb, VK_PIPELINE_BIND_POINT_GRAPHICS, mPipelineLayout,
+                          0, 1, &mDescriptorSet, 0, nullptr);
+  vkCmdDrawIndirect(cb, indirectBuffer->mBuffer, 0, 1, 16);
+  vkCmdEndRenderPass(cb);
+}
+
 void RenderPass::Execute() {
   VkDevice device = GetVulkanDevice();
   VkCommandBuffer cb = CreateCommandBuffer();
@@ -278,33 +339,8 @@ void RenderPass::Execute() {
   BeginCommandBuffer(cb, VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
 
   if (mType == RenderPassType::Compute) {
-    SCOPED_EVENT(cb, mName.c_str());
-
-    vkUpdateDescriptorSets(device,
-                           static_cast<uint32_t>(mWriteDescriptorSets.size()),
-                           mWriteDescriptorSets.data(), 0, nullptr);
-
-    for (auto *tex : mOutputTextures) {
-      VkImageSubresourceRange range = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
-      TransferImageLayout(cb, tex->mImage, range, VK_IMAGE_LAYOUT_UNDEFINED,
-                          VK_ACCESS_NONE, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-                          VK_IMAGE_LAYOUT_GENERAL, VK_ACCESS_SHADER_WRITE_BIT,
-                          VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
-    }
-
-    vkCmdBindPipeline(cb, VK_PIPELINE_BIND_POINT_COMPUTE, mPSO);
-    vkCmdBindDescriptorSets(cb, VK_PIPELINE_BIND_POINT_COMPUTE, mPipelineLayout,
-                            0, 1, &mDescriptorSet, 0, nullptr);
-    vkCmdDispatch(cb, mDispatchX, mDispatchY, mDispatchZ);
-
-    for (auto *tex : mOutputTextures) {
-      VkImageSubresourceRange range = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
-      TransferImageLayout(
-          cb, tex->mImage, range, VK_IMAGE_LAYOUT_GENERAL,
-          VK_ACCESS_SHADER_WRITE_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-          VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_ACCESS_SHADER_READ_BIT,
-          VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
-    }
+    UpdateDescriptorSets();
+    RecordComputeCommands(cb);
   }
 
   vkEndCommandBuffer(cb);
@@ -339,33 +375,9 @@ void RenderPass::ExecuteIndirect(VulkanBuffer *indirectBuffer) {
   }
   BeginCommandBuffer(cb, VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
 
-  {
-    SCOPED_EVENT(cb, mName.c_str());
+  UpdateDescriptorSets();
+  RecordGraphicsIndirectCommands(cb, indirectBuffer);
 
-    vkUpdateDescriptorSets(device,
-                           static_cast<uint32_t>(mWriteDescriptorSets.size()),
-                           mWriteDescriptorSets.data(), 0, nullptr);
-
-    VkClearValue clearValues[2];
-    clearValues[0].color = {{0.0f, 0.0f, 0.0f, 1.0f}};
-    clearValues[1].depthStencil = {1.0f, 0};
-
-    VkRenderPassBeginInfo rpBegin = {};
-    rpBegin.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-    rpBegin.renderPass = mRenderPass;
-    rpBegin.framebuffer = mFrameBuffer;
-    rpBegin.clearValueCount = 2;
-    rpBegin.pClearValues = clearValues;
-    rpBegin.renderArea.extent = {mViewportWidth, mViewportHeight};
-
-    vkCmdBeginRenderPass(cb, &rpBegin, VK_SUBPASS_CONTENTS_INLINE);
-    vkCmdBindPipeline(cb, VK_PIPELINE_BIND_POINT_GRAPHICS, mPSO);
-    vkCmdBindDescriptorSets(cb, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                            mPipelineLayout, 0, 1, &mDescriptorSet, 0, nullptr);
-    vkCmdDrawIndirect(cb, indirectBuffer->mBuffer, 0, 1, 16);
-  }
-
-  vkCmdEndRenderPass(cb);
   vkEndCommandBuffer(cb);
 
   VkFence fence;

@@ -57,8 +57,16 @@ bool InitVulkan(GLFWwindow *window, int canvasWidth, int canvasHeight);
 VkCommandBuffer CreateCommandBuffer(
     VkCommandBufferLevel level = VK_COMMAND_BUFFER_LEVEL_PRIMARY);
 void BeginCommandBuffer(VkCommandBuffer cb, VkCommandBufferUsageFlagBits usage);
-uint32_t BeginSwapChainRenderPass(VkCommandBuffer cb);
-void EndSwapChainRenderPass(VkCommandBuffer cb);
+
+/// Waits for the in-flight fence, resets it, acquires a swapchain image.
+bool PrepareSwapChainFrame(uint32_t *outImageIndex);
+void CmdBeginSwapChainRenderPass(VkCommandBuffer cb, uint32_t imageIndex);
+void SubmitAndPresentSwapChainFrame(VkCommandBuffer cb, uint32_t imageIndex);
+
+void CmdBarrierAfterComputeWrites(VkCommandBuffer cb);
+void CmdBarrierComputeToIndirectAndDraw(VkCommandBuffer cb);
+void CmdBarrierFragmentStorageToCompute(VkCommandBuffer cb);
+void CmdBarrierComputeToFragmentSample(VkCommandBuffer cb);
 
 VkQueue GetGraphicQueue();
 VkDevice GetVulkanDevice();

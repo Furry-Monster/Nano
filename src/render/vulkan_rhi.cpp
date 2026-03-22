@@ -24,14 +24,13 @@ static std::vector<VkPresentModeKHR> sPresentModes;
 static VkSwapchainKHR sSwapChain = VK_NULL_HANDLE;
 static std::vector<VkImage> sSwapChainImages;
 static std::vector<VkImageView> sSwapChainImageViews;
+static std::vector<VkFramebuffer> sSwapChainFBOs;
 static Texture *sDepthBuffer = nullptr;
 static VkRenderPass sSwapChainRenderPass = VK_NULL_HANDLE;
-static VkFramebuffer sSwapChainFBOs[2];
 static VkCommandPool sCommandPool = VK_NULL_HANDLE;
 static VkSemaphore sReadyToRender = VK_NULL_HANDLE;
 static VkSemaphore sReadyToPresent = VK_NULL_HANDLE;
 static VkFence sInFlightFence = VK_NULL_HANDLE;
-static uint32_t sCurrentFrameIndex = 0;
 static uint32_t sCanvasWidth = 1280;
 static uint32_t sCanvasHeight = 720;
 
@@ -147,45 +146,88 @@ static bool InitSurface(GLFWwindow *window) {
          VK_SUCCESS;
 }
 
+static bool TryPickQueueFamilies(VkPhysicalDevice device,
+                                 uint32_t *outGraphicIdx,
+                                 uint32_t *outPresentIdx) {
+  uint32_t queueCount = 0;
+  vkGetPhysicalDeviceQueueFamilyProperties(device, &queueCount, nullptr);
+  std::vector<VkQueueFamilyProperties> queueProps(queueCount);
+  vkGetPhysicalDeviceQueueFamilyProperties(device, &queueCount,
+                                           queueProps.data());
+
+  int graphicIdx = -1, presentIdx = -1;
+  for (uint32_t j = 0; j < queueCount; j++) {
+    if (queueProps[j].queueCount > 0 &&
+        (queueProps[j].queueFlags & VK_QUEUE_GRAPHICS_BIT)) {
+      graphicIdx = static_cast<int>(j);
+    }
+    VkBool32 presentSupport = VK_FALSE;
+    vkGetPhysicalDeviceSurfaceSupportKHR(device, j, sSurface, &presentSupport);
+    if (queueProps[j].queueCount > 0 && presentSupport) {
+      presentIdx = static_cast<int>(j);
+    }
+    if (graphicIdx >= 0 && presentIdx >= 0) {
+      *outGraphicIdx = static_cast<uint32_t>(graphicIdx);
+      *outPresentIdx = static_cast<uint32_t>(presentIdx);
+      return true;
+    }
+  }
+  return false;
+}
+
 static bool InitPhysicalDevice() {
   uint32_t count = 0;
   vkEnumeratePhysicalDevices(sInstance, &count, nullptr);
+  if (count == 0) {
+    spdlog::error("No Vulkan physical devices found");
+    return false;
+  }
   std::vector<VkPhysicalDevice> devices(count);
   vkEnumeratePhysicalDevices(sInstance, &count, devices.data());
 
+  VkPhysicalDevice bestDevice = VK_NULL_HANDLE;
+  uint32_t bestG = 0, bestP = 0;
+  int bestScore = -1;
+
   for (auto &device : devices) {
-    uint32_t queueCount = 0;
-    vkGetPhysicalDeviceQueueFamilyProperties(device, &queueCount, nullptr);
-    std::vector<VkQueueFamilyProperties> queueProps(queueCount);
-    vkGetPhysicalDeviceQueueFamilyProperties(device, &queueCount,
-                                             queueProps.data());
-
-    int graphicIdx = -1, presentIdx = -1;
-    for (uint32_t j = 0; j < queueCount; j++) {
-      if (queueProps[j].queueCount > 0 &&
-          (queueProps[j].queueFlags & VK_QUEUE_GRAPHICS_BIT)) {
-        graphicIdx = static_cast<int>(j);
-      }
-      VkBool32 presentSupport = VK_FALSE;
-      vkGetPhysicalDeviceSurfaceSupportKHR(device, j, sSurface,
-                                           &presentSupport);
-      if (queueProps[j].queueCount > 0 && presentSupport) {
-        presentIdx = static_cast<int>(j);
-      }
-      if (graphicIdx >= 0 && presentIdx >= 0) {
-        sGPU = device;
-        sGraphicQueueFamily = static_cast<uint32_t>(graphicIdx);
-        sPresentQueueFamily = static_cast<uint32_t>(presentIdx);
-
-        VkPhysicalDeviceProperties props;
-        vkGetPhysicalDeviceProperties(device, &props);
-        spdlog::info("GPU-{}: {}", props.deviceID, props.deviceName);
-        return true;
-      }
+    uint32_t g = 0, p = 0;
+    if (!TryPickQueueFamilies(device, &g, &p)) {
+      continue;
+    }
+    VkPhysicalDeviceProperties props;
+    vkGetPhysicalDeviceProperties(device, &props);
+    int score = 0;
+    switch (props.deviceType) {
+    case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU:
+      score = 100;
+      break;
+    case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU:
+      score = 50;
+      break;
+    default:
+      score = 10;
+      break;
+    }
+    if (score > bestScore) {
+      bestScore = score;
+      bestDevice = device;
+      bestG = g;
+      bestP = p;
     }
   }
-  spdlog::error("No suitable GPU found");
-  return false;
+
+  if (bestDevice == VK_NULL_HANDLE) {
+    spdlog::error("No suitable GPU found");
+    return false;
+  }
+
+  sGPU = bestDevice;
+  sGraphicQueueFamily = bestG;
+  sPresentQueueFamily = bestP;
+  VkPhysicalDeviceProperties props;
+  vkGetPhysicalDeviceProperties(bestDevice, &props);
+  spdlog::info("GPU-{}: {}", props.deviceID, props.deviceName);
+  return true;
 }
 
 static bool InitLogicDevice() {
@@ -282,7 +324,14 @@ static bool InitSwapchain() {
   info.imageArrayLayers = 1;
   info.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
   info.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-  info.presentMode = VK_PRESENT_MODE_FIFO_KHR;
+  VkPresentModeKHR presentMode = VK_PRESENT_MODE_FIFO_KHR;
+  for (VkPresentModeKHR mode : sPresentModes) {
+    if (mode == VK_PRESENT_MODE_MAILBOX_KHR) {
+      presentMode = VK_PRESENT_MODE_MAILBOX_KHR;
+      break;
+    }
+  }
+  info.presentMode = presentMode;
   info.preTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
 
   uint32_t queueFamilyIndices[] = {sGraphicQueueFamily, sPresentQueueFamily};
@@ -373,8 +422,9 @@ static void InitSwapChainRenderPass() {
 }
 
 static void InitSwapChainFBOs() {
-  const auto imageCnt = static_cast<uint32_t>(sSwapChainImageViews.size());
-  for (uint32_t i = 0; i < imageCnt; i++) {
+  const auto imageCnt = sSwapChainImageViews.size();
+  sSwapChainFBOs.resize(imageCnt);
+  for (size_t i = 0; i < imageCnt; i++) {
     VkImageView views[] = {sSwapChainImageViews[i], sDepthBuffer->mImageView};
 
     VkFramebufferCreateInfo fbInfo = {};
@@ -582,12 +632,24 @@ void BeginCommandBuffer(VkCommandBuffer cb,
   vkBeginCommandBuffer(cb, &beginInfo);
 }
 
-uint32_t BeginSwapChainRenderPass(VkCommandBuffer cb) {
+bool PrepareSwapChainFrame(uint32_t *outImageIndex) {
   vkWaitForFences(sDevice, 1, &sInFlightFence, VK_TRUE, UINT64_MAX);
-  vkResetFences(sDevice, 1, &sInFlightFence);
 
-  vkAcquireNextImageKHR(sDevice, sSwapChain, UINT64_MAX, sReadyToRender,
-                        VK_NULL_HANDLE, &sCurrentFrameIndex);
+  VkResult acquire =
+      vkAcquireNextImageKHR(sDevice, sSwapChain, UINT64_MAX, sReadyToRender,
+                            VK_NULL_HANDLE, outImageIndex);
+  if (acquire != VK_SUCCESS && acquire != VK_SUBOPTIMAL_KHR) {
+    spdlog::warn("vkAcquireNextImageKHR failed: {}", static_cast<int>(acquire));
+    return false;
+  }
+  return true;
+}
+
+void CmdBeginSwapChainRenderPass(VkCommandBuffer cb, uint32_t imageIndex) {
+  if (imageIndex >= sSwapChainFBOs.size()) {
+    spdlog::error("Swapchain image index out of range");
+    return;
+  }
 
   VkClearValue clearValues[2];
   clearValues[0].color = {{0.1f, 0.4f, 0.6f, 1.0f}};
@@ -596,19 +658,17 @@ uint32_t BeginSwapChainRenderPass(VkCommandBuffer cb) {
   VkRenderPassBeginInfo rpBegin = {};
   rpBegin.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
   rpBegin.renderPass = sSwapChainRenderPass;
-  rpBegin.framebuffer = sSwapChainFBOs[sCurrentFrameIndex];
+  rpBegin.framebuffer = sSwapChainFBOs[imageIndex];
   rpBegin.clearValueCount = 2;
   rpBegin.pClearValues = clearValues;
   rpBegin.renderArea.offset = {0, 0};
   rpBegin.renderArea.extent = {sCanvasWidth, sCanvasHeight};
 
   vkCmdBeginRenderPass(cb, &rpBegin, VK_SUBPASS_CONTENTS_INLINE);
-  return sCurrentFrameIndex;
 }
 
-void EndSwapChainRenderPass(VkCommandBuffer cb) {
-  vkCmdEndRenderPass(cb);
-  vkEndCommandBuffer(cb);
+void SubmitAndPresentSwapChainFrame(VkCommandBuffer cb, uint32_t imageIndex) {
+  vkResetFences(sDevice, 1, &sInFlightFence);
 
   VkPipelineStageFlags waitStage =
       VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
@@ -629,11 +689,53 @@ void EndSwapChainRenderPass(VkCommandBuffer cb) {
   presentInfo.pWaitSemaphores = &sReadyToPresent;
   presentInfo.swapchainCount = 1;
   presentInfo.pSwapchains = &sSwapChain;
-  presentInfo.pImageIndices = &sCurrentFrameIndex;
+  presentInfo.pImageIndices = &imageIndex;
   vkQueuePresentKHR(sPresentQueue, &presentInfo);
-  vkQueueWaitIdle(sPresentQueue);
 
   vkFreeCommandBuffers(sDevice, sCommandPool, 1, &cb);
+}
+
+void CmdBarrierAfterComputeWrites(VkCommandBuffer cb) {
+  VkMemoryBarrier barrier = {};
+  barrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
+  barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+  barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT |
+                          VK_ACCESS_SHADER_WRITE_BIT |
+                          VK_ACCESS_UNIFORM_READ_BIT;
+  vkCmdPipelineBarrier(cb, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                       VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 1, &barrier, 0,
+                       nullptr, 0, nullptr);
+}
+
+void CmdBarrierComputeToIndirectAndDraw(VkCommandBuffer cb) {
+  VkMemoryBarrier barrier = {};
+  barrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
+  barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+  barrier.dstAccessMask =
+      VK_ACCESS_INDIRECT_COMMAND_READ_BIT | VK_ACCESS_SHADER_READ_BIT |
+      VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_UNIFORM_READ_BIT;
+  vkCmdPipelineBarrier(cb, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                       VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT |
+                           VK_PIPELINE_STAGE_VERTEX_SHADER_BIT |
+                           VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                       0, 1, &barrier, 0, nullptr, 0, nullptr);
+}
+
+void CmdBarrierFragmentStorageToCompute(VkCommandBuffer cb) {
+  VkMemoryBarrier barrier = {};
+  barrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
+  barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+  barrier.dstAccessMask =
+      VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+  vkCmdPipelineBarrier(cb, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                       VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 1, &barrier, 0,
+                       nullptr, 0, nullptr);
+}
+
+void CmdBarrierComputeToFragmentSample(VkCommandBuffer cb) {
+  vkCmdPipelineBarrier(cb, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                       VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, nullptr, 0,
+                       nullptr, 0, nullptr);
 }
 
 VkQueue GetGraphicQueue() { return sGraphicQueue; }
@@ -644,7 +746,9 @@ VkRenderPass GetSwapChainRenderPass() { return sSwapChainRenderPass; }
 ShaderParameterDescription *GetUberPassShaderParameterDescription() {
   return &sUberShaderParams;
 }
-VkFramebuffer *GetSwapChainFrameBuffers() { return sSwapChainFBOs; }
+VkFramebuffer *GetSwapChainFrameBuffers() {
+  return sSwapChainFBOs.empty() ? nullptr : sSwapChainFBOs.data();
+}
 
 void GenImage(Texture *outTex, int width, int height, VkImageUsageFlags usage,
               VkMemoryPropertyFlagBits memProps) {

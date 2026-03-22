@@ -51,6 +51,12 @@ public:
   void SetComputeImage(int binding, Texture2D *image, bool isOutput = false);
   void SetComputeDispatchArgs(int x, int y, int z);
   void Build(uint32_t canvasWidth = 0, uint32_t canvasHeight = 0);
+
+  void UpdateDescriptorSets();
+  void RecordComputeCommands(VkCommandBuffer cb);
+  void RecordGraphicsIndirectCommands(VkCommandBuffer cb,
+                                      VulkanBuffer *indirectBuffer);
+
   void Execute();
   void ExecuteIndirect(VulkanBuffer *indirectBuffer);
 };
