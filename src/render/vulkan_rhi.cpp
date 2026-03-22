@@ -257,7 +257,12 @@ static void InitSurfaceProperties() {
                                             sPresentModes.data());
 }
 
-static void InitSwapchain() {
+static bool InitSwapchain() {
+  if (sSurfaceFormats.empty()) {
+    spdlog::error("No Vulkan surface formats available");
+    return false;
+  }
+
   VkSurfaceFormatKHR selectedFormat = sSurfaceFormats[0];
   for (auto &fmt : sSurfaceFormats) {
     if (fmt.format == VK_FORMAT_B8G8R8A8_UNORM &&
@@ -291,7 +296,12 @@ static void InitSwapchain() {
     info.pQueueFamilyIndices = queueFamilyIndices;
   }
 
-  vkCreateSwapchainKHR(sDevice, &info, nullptr, &sSwapChain);
+  if (vkCreateSwapchainKHR(sDevice, &info, nullptr, &sSwapChain) !=
+      VK_SUCCESS) {
+    spdlog::error("Failed to create swapchain");
+    return false;
+  }
+  return true;
 }
 
 static void InitSwapChainRenderTargets() {
@@ -477,7 +487,10 @@ bool InitVulkan(GLFWwindow *window, int canvasWidth, int canvasHeight) {
     return false;
 
   InitSurfaceProperties();
-  InitSwapchain();
+  if (!InitSwapchain()) {
+    spdlog::error("Swapchain initialization failed");
+    return false;
+  }
   InitSwapChainRenderTargets();
   InitSwapChainRenderPass();
   InitSwapChainFBOs();
@@ -513,8 +526,21 @@ VulkanBuffer *GenBufferObject(VkBufferUsageFlags usage,
   allocInfo.allocationSize = memReqs.size;
   allocInfo.memoryTypeIndex = FindMemoryType(memReqs.memoryTypeBits, memProps);
 
-  vkAllocateMemory(sDevice, &allocInfo, nullptr, &buffer->mMemory);
-  vkBindBufferMemory(sDevice, buffer->mBuffer, buffer->mMemory, 0);
+  if (vkAllocateMemory(sDevice, &allocInfo, nullptr, &buffer->mMemory) !=
+      VK_SUCCESS) {
+    spdlog::error("Failed to allocate buffer memory");
+    vkDestroyBuffer(sDevice, buffer->mBuffer, nullptr);
+    delete buffer;
+    return nullptr;
+  }
+  if (vkBindBufferMemory(sDevice, buffer->mBuffer, buffer->mMemory, 0) !=
+      VK_SUCCESS) {
+    spdlog::error("Failed to bind buffer memory");
+    vkFreeMemory(sDevice, buffer->mMemory, nullptr);
+    vkDestroyBuffer(sDevice, buffer->mBuffer, nullptr);
+    delete buffer;
+    return nullptr;
+  }
 
   if (memProps == VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT && data != nullptr) {
     void *mapped = nullptr;
@@ -541,7 +567,10 @@ VkCommandBuffer CreateCommandBuffer(VkCommandBufferLevel level) {
   allocInfo.commandPool = sCommandPool;
   allocInfo.commandBufferCount = 1;
   allocInfo.level = level;
-  vkAllocateCommandBuffers(sDevice, &allocInfo, &cb);
+  if (vkAllocateCommandBuffers(sDevice, &allocInfo, &cb) != VK_SUCCESS) {
+    spdlog::error("Failed to allocate command buffer");
+    return VK_NULL_HANDLE;
+  }
   return cb;
 }
 
@@ -632,7 +661,11 @@ void GenImage(Texture *outTex, int width, int height, VkImageUsageFlags usage,
   imgInfo.usage = usage;
   imgInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
   imgInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-  vkCreateImage(sDevice, &imgInfo, nullptr, &outTex->mImage);
+  if (vkCreateImage(sDevice, &imgInfo, nullptr, &outTex->mImage) !=
+      VK_SUCCESS) {
+    spdlog::error("Failed to create image");
+    return;
+  }
 
   VkMemoryRequirements memReqs;
   vkGetImageMemoryRequirements(sDevice, outTex->mImage, &memReqs);
@@ -642,8 +675,21 @@ void GenImage(Texture *outTex, int width, int height, VkImageUsageFlags usage,
   allocInfo.allocationSize = memReqs.size;
   allocInfo.memoryTypeIndex = FindMemoryType(memReqs.memoryTypeBits, memProps);
 
-  vkAllocateMemory(sDevice, &allocInfo, nullptr, &outTex->mMemory);
-  vkBindImageMemory(sDevice, outTex->mImage, outTex->mMemory, 0);
+  if (vkAllocateMemory(sDevice, &allocInfo, nullptr, &outTex->mMemory) !=
+      VK_SUCCESS) {
+    spdlog::error("Failed to allocate image memory");
+    vkDestroyImage(sDevice, outTex->mImage, nullptr);
+    outTex->mImage = VK_NULL_HANDLE;
+    return;
+  }
+  if (vkBindImageMemory(sDevice, outTex->mImage, outTex->mMemory, 0) !=
+      VK_SUCCESS) {
+    spdlog::error("Failed to bind image memory");
+    vkFreeMemory(sDevice, outTex->mMemory, nullptr);
+    vkDestroyImage(sDevice, outTex->mImage, nullptr);
+    outTex->mImage = VK_NULL_HANDLE;
+    outTex->mMemory = VK_NULL_HANDLE;
+  }
 }
 
 VkImageView GenImageView2D(VkImage image, VkFormat format,
@@ -793,12 +839,36 @@ VkShaderModule LoadShaderModule(const char *filePath) {
     return VK_NULL_HANDLE;
   }
 
-  std::fseek(file, 0, SEEK_END);
-  long fileSize = std::ftell(file);
-  std::rewind(file);
+  if (std::fseek(file, 0, SEEK_END) != 0) {
+    spdlog::error("Failed to seek shader: {}", filePath);
+    std::fclose(file);
+    return VK_NULL_HANDLE;
+  }
+
+  const long fileSizeLong = std::ftell(file);
+  if (fileSizeLong < 0) {
+    spdlog::error("Failed to get shader size: {}", filePath);
+    std::fclose(file);
+    return VK_NULL_HANDLE;
+  }
+
+  const size_t fileSize = static_cast<size_t>(fileSizeLong);
+  if (std::fseek(file, 0, SEEK_SET) != 0) {
+    spdlog::error("Failed to rewind shader: {}", filePath);
+    std::fclose(file);
+    return VK_NULL_HANDLE;
+  }
 
   std::vector<unsigned char> content(fileSize);
-  std::fread(content.data(), 1, fileSize, file);
+  if (fileSize > 0) {
+    const size_t read = std::fread(content.data(), 1, fileSize, file);
+    if (read != fileSize) {
+      spdlog::error("Incomplete shader read: {} ({}/{})", filePath, read,
+                    fileSize);
+      std::fclose(file);
+      return VK_NULL_HANDLE;
+    }
+  }
   std::fclose(file);
 
   VkShaderModuleCreateInfo moduleInfo = {};

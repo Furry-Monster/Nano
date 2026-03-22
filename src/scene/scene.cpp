@@ -47,14 +47,44 @@ static unsigned char *LoadFileContent(const char *path, size_t &outSize) {
     return nullptr;
   }
 
-  std::fseek(file, 0, SEEK_END);
-  outSize = std::ftell(file);
-  std::fseek(file, 0, SEEK_SET);
+  if (std::fseek(file, 0, SEEK_END) != 0) {
+    spdlog::error("Failed to seek file: {}", path);
+    std::fclose(file);
+    outSize = 0;
+    return nullptr;
+  }
+
+  const long sizeLong = std::ftell(file);
+  if (sizeLong < 0) {
+    spdlog::error("Failed to get file size: {}", path);
+    std::fclose(file);
+    outSize = 0;
+    return nullptr;
+  }
+
+  outSize = static_cast<size_t>(sizeLong);
+  if (std::fseek(file, 0, SEEK_SET) != 0) {
+    spdlog::error("Failed to rewind file: {}", path);
+    std::fclose(file);
+    outSize = 0;
+    return nullptr;
+  }
+
+  if (outSize == 0) {
+    std::fclose(file);
+    return nullptr;
+  }
 
   auto *content = new unsigned char[outSize];
-  std::fread(content, 1, outSize, file);
-
+  const size_t read = std::fread(content, 1, outSize, file);
   std::fclose(file);
+  if (read != outSize) {
+    spdlog::error("Incomplete read: {} ({}/{})", path, read, outSize);
+    delete[] content;
+    outSize = 0;
+    return nullptr;
+  }
+
   return content;
 }
 
@@ -282,6 +312,9 @@ void RenderOneFrame([[maybe_unused]] float frameTime) {
   sVisualizePass->Execute();
 
   VkCommandBuffer cb = CreateCommandBuffer();
+  if (cb == VK_NULL_HANDLE) {
+    return;
+  }
   BeginCommandBuffer(cb, VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
   {
     SCOPED_EVENT(cb, "SwapChain");

@@ -272,6 +272,9 @@ void RenderPass::Build(uint32_t canvasWidth, uint32_t canvasHeight) {
 void RenderPass::Execute() {
   VkDevice device = GetVulkanDevice();
   VkCommandBuffer cb = CreateCommandBuffer();
+  if (cb == VK_NULL_HANDLE) {
+    return;
+  }
   BeginCommandBuffer(cb, VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
 
   if (mType == RenderPassType::Compute) {
@@ -331,6 +334,9 @@ void RenderPass::Execute() {
 void RenderPass::ExecuteIndirect(VulkanBuffer *indirectBuffer) {
   VkDevice device = GetVulkanDevice();
   VkCommandBuffer cb = CreateCommandBuffer();
+  if (cb == VK_NULL_HANDLE) {
+    return;
+  }
   BeginCommandBuffer(cb, VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
 
   {
