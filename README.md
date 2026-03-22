@@ -14,7 +14,7 @@ LOD 3:
 
 ```bash
 # Compile shaders
-cd shaders && chmod +x build.sh && ./build.sh && cd ..
+cd shaders && chmod +x compile.sh && ./compile.sh && cd ..
 
 # Build
 cmake -B build -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
@@ -58,11 +58,13 @@ libs/                   - Third-party libraries (GLFW, GLM, ImGui, spdlog, stb)
 3. **ClusterCull** (Compute) - Copy visible clusters to output buffer
 4. **HWRasterize** (Graphics, Indirect) - Rasterize clusters, write depth+clusterID to VisBuffer64 via atomicMin
 5. **Visualize** (Compute) - Convert VisBuffer64 cluster IDs to colors via MurmurHash
-6. **SwapChain** (Graphics) - Blit visualization texture to screen
+6. **BuildHZB** (Compute) - Mip0 from VisBuffer64 depth, then max-reduction mips (previous-frame occlusion pyramid for step 2)
+7. **SwapChain** (Graphics) - Blit visualization texture to screen
+
+`GlobalConstants.mMisc0`: **x** = manual LOD mip, **y** = HZB occlusion (0 first frame / warmup, 1 once prior frame depth exists), **z/w** = screen size for projection tests.
 
 ## TODO
 
-1. Add HZB for cluster culling.
-2. Using Multithreading for BVH traversal and other tasks.
+1. Using Multithreading for BVH traversal and other tasks.
 3. Implement LOD selection based on distance to camera (maybe also a roaming camera...).
 4. Finish the exporter module to support exporting BVH and NaniteMesh data.

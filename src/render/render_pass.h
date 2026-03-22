@@ -2,6 +2,7 @@
 
 #include "vulkan_rhi.h"
 
+#include <deque>
 #include <string>
 #include <vector>
 
@@ -29,11 +30,15 @@ public:
 
   std::vector<VkDescriptorSetLayoutBinding> mLayoutBindings;
   std::vector<VkWriteDescriptorSet> mWriteDescriptorSets;
+  std::deque<VkDescriptorBufferInfo> mDescriptorBufferInfos;
+  std::deque<VkDescriptorImageInfo> mDescriptorImageInfos;
   std::vector<Texture2D *> mTextures;
   std::vector<Texture2D *> mOutputTextures;
   std::vector<VulkanBuffer *> mBuffers;
   std::vector<VulkanBuffer *> mOutputBuffers;
   std::vector<VulkanBuffer *> mUniformBuffers;
+  uint32_t mCombinedImageSamplerCount = 0;
+  uint32_t mStandaloneStorageImageCount = 0;
 
   int mDispatchX = 1, mDispatchY = 1, mDispatchZ = 1;
   uint32_t mViewportWidth = 0, mViewportHeight = 0;
@@ -46,8 +51,18 @@ public:
   void SetUniformBufferObject(int binding, VulkanBuffer *ubo);
   void SetSSBO(int binding, VulkanBuffer *buffer, bool isOutput = false);
   void SetComputeImage(int binding, Texture2D *image, bool isOutput = false);
+  void SetComputeStorageImageView(int binding, VkImageView view,
+                                  bool isOutput = false);
+  void SetCombinedImageSampler(int binding, VkImageView imageView,
+                               VkSampler sampler);
   void SetComputeDispatchArgs(int x, int y, int z);
   void Build(uint32_t canvasWidth = 0, uint32_t canvasHeight = 0);
+
+  void UpdateDescriptorSets();
+  void RecordComputeCommands(VkCommandBuffer cb);
+  void RecordGraphicsIndirectCommands(VkCommandBuffer cb,
+                                      VulkanBuffer *indirectBuffer);
+
   void Execute();
   void ExecuteIndirect(VulkanBuffer *indirectBuffer);
 };

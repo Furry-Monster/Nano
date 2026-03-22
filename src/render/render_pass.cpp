@@ -20,22 +20,82 @@ void RenderPass::SetComputeImage(int binding, Texture2D *image, bool isOutput) {
       VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
   mLayoutBindings.push_back(layoutBinding);
 
-  auto *imageInfo = new VkDescriptorImageInfo;
-  imageInfo->imageLayout = VK_IMAGE_LAYOUT_GENERAL;
-  imageInfo->imageView = image->mImageView;
-  imageInfo->sampler = VK_NULL_HANDLE;
+  VkDescriptorImageInfo imageInfo = {};
+  imageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+  imageInfo.imageView = image->mImageView;
+  imageInfo.sampler = VK_NULL_HANDLE;
+  mDescriptorImageInfos.push_back(imageInfo);
 
   VkWriteDescriptorSet write = {};
   write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
   write.descriptorCount = 1;
   write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
   write.dstBinding = binding;
-  write.pImageInfo = imageInfo;
+  write.pImageInfo = &mDescriptorImageInfos.back();
   mWriteDescriptorSets.push_back(write);
 
   mTextures.push_back(image);
   if (isOutput)
     mOutputTextures.push_back(image);
+}
+
+void RenderPass::SetComputeStorageImageView(int binding, VkImageView view,
+                                            bool isOutput) {
+  VkDescriptorSetLayoutBinding layoutBinding = {};
+  layoutBinding.binding = binding;
+  layoutBinding.descriptorCount = 1;
+  layoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+  layoutBinding.stageFlags =
+      VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+  mLayoutBindings.push_back(layoutBinding);
+
+  VkDescriptorImageInfo imageInfo = {};
+  imageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+  imageInfo.imageView = view;
+  imageInfo.sampler = VK_NULL_HANDLE;
+  mDescriptorImageInfos.push_back(imageInfo);
+
+  VkWriteDescriptorSet write = {};
+  write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+  write.descriptorCount = 1;
+  write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+  write.dstBinding = binding;
+  write.pImageInfo = &mDescriptorImageInfos.back();
+  mWriteDescriptorSets.push_back(write);
+
+  mStandaloneStorageImageCount++;
+
+  if (isOutput) {
+    spdlog::warn(
+        "SetComputeStorageImageView: isOutput layout transitions not tracked");
+  }
+}
+
+void RenderPass::SetCombinedImageSampler(int binding, VkImageView imageView,
+                                         VkSampler sampler) {
+  VkDescriptorSetLayoutBinding layoutBinding = {};
+  layoutBinding.binding = binding;
+  layoutBinding.descriptorCount = 1;
+  layoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+  layoutBinding.stageFlags =
+      VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+  mLayoutBindings.push_back(layoutBinding);
+
+  VkDescriptorImageInfo imageInfo = {};
+  imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+  imageInfo.imageView = imageView;
+  imageInfo.sampler = sampler;
+  mDescriptorImageInfos.push_back(imageInfo);
+
+  VkWriteDescriptorSet write = {};
+  write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+  write.descriptorCount = 1;
+  write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+  write.dstBinding = binding;
+  write.pImageInfo = &mDescriptorImageInfos.back();
+  mWriteDescriptorSets.push_back(write);
+
+  mCombinedImageSamplerCount++;
 }
 
 void RenderPass::SetSSBO(int binding, VulkanBuffer *buffer, bool isOutput) {
@@ -48,17 +108,18 @@ void RenderPass::SetSSBO(int binding, VulkanBuffer *buffer, bool isOutput) {
                              VK_SHADER_STAGE_FRAGMENT_BIT;
   mLayoutBindings.push_back(layoutBinding);
 
-  auto *bufferInfo = new VkDescriptorBufferInfo;
-  bufferInfo->buffer = buffer->mBuffer;
-  bufferInfo->offset = 0;
-  bufferInfo->range = buffer->mSize;
+  VkDescriptorBufferInfo bufferInfo = {};
+  bufferInfo.buffer = buffer->mBuffer;
+  bufferInfo.offset = 0;
+  bufferInfo.range = buffer->mSize;
+  mDescriptorBufferInfos.push_back(bufferInfo);
 
   VkWriteDescriptorSet write = {};
   write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
   write.descriptorCount = 1;
   write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
   write.dstBinding = binding;
-  write.pBufferInfo = bufferInfo;
+  write.pBufferInfo = &mDescriptorBufferInfos.back();
   mWriteDescriptorSets.push_back(write);
 
   mBuffers.push_back(buffer);
@@ -75,17 +136,18 @@ void RenderPass::SetUniformBufferObject(int binding, VulkanBuffer *ubo) {
       VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_COMPUTE_BIT;
   mLayoutBindings.push_back(layoutBinding);
 
-  auto *bufferInfo = new VkDescriptorBufferInfo;
-  bufferInfo->buffer = ubo->mBuffer;
-  bufferInfo->offset = 0;
-  bufferInfo->range = ubo->mSize;
+  VkDescriptorBufferInfo bufferInfo = {};
+  bufferInfo.buffer = ubo->mBuffer;
+  bufferInfo.offset = 0;
+  bufferInfo.range = ubo->mSize;
+  mDescriptorBufferInfos.push_back(bufferInfo);
 
   VkWriteDescriptorSet write = {};
   write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
   write.descriptorCount = 1;
   write.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
   write.dstBinding = binding;
-  write.pBufferInfo = bufferInfo;
+  write.pBufferInfo = &mDescriptorBufferInfos.back();
   mWriteDescriptorSets.push_back(write);
 
   mUniformBuffers.push_back(ubo);
@@ -118,13 +180,19 @@ void RenderPass::Build(uint32_t canvasWidth, uint32_t canvasHeight) {
     poolSizes.push_back({VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
                          static_cast<uint32_t>(mUniformBuffers.size())});
   }
-  if (!mTextures.empty()) {
-    poolSizes.push_back({VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-                         static_cast<uint32_t>(mTextures.size())});
+  const uint32_t storageImageDescCount =
+      static_cast<uint32_t>(mTextures.size() + mStandaloneStorageImageCount);
+  if (storageImageDescCount > 0) {
+    poolSizes.push_back(
+        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, storageImageDescCount});
   }
   if (!mBuffers.empty()) {
     poolSizes.push_back({VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
                          static_cast<uint32_t>(mBuffers.size())});
+  }
+  if (mCombinedImageSamplerCount > 0) {
+    poolSizes.push_back({VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                         mCombinedImageSamplerCount});
   }
 
   VkDescriptorPoolCreateInfo poolInfo = {};
@@ -266,39 +334,78 @@ void RenderPass::Build(uint32_t canvasWidth, uint32_t canvasHeight) {
   }
 }
 
+void RenderPass::UpdateDescriptorSets() {
+  VkDevice device = GetVulkanDevice();
+  vkUpdateDescriptorSets(device,
+                         static_cast<uint32_t>(mWriteDescriptorSets.size()),
+                         mWriteDescriptorSets.data(), 0, nullptr);
+}
+
+void RenderPass::RecordComputeCommands(VkCommandBuffer cb) {
+  if (mType != RenderPassType::Compute) {
+    return;
+  }
+
+  SCOPED_EVENT(cb, mName.c_str());
+
+  for (auto *tex : mOutputTextures) {
+    VkImageSubresourceRange range = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+    TransferImageLayout(cb, tex->mImage, range, VK_IMAGE_LAYOUT_UNDEFINED,
+                        VK_ACCESS_NONE, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                        VK_IMAGE_LAYOUT_GENERAL, VK_ACCESS_SHADER_WRITE_BIT,
+                        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
+  }
+
+  vkCmdBindPipeline(cb, VK_PIPELINE_BIND_POINT_COMPUTE, mPSO);
+  vkCmdBindDescriptorSets(cb, VK_PIPELINE_BIND_POINT_COMPUTE, mPipelineLayout,
+                          0, 1, &mDescriptorSet, 0, nullptr);
+  vkCmdDispatch(cb, mDispatchX, mDispatchY, mDispatchZ);
+
+  for (auto *tex : mOutputTextures) {
+    VkImageSubresourceRange range = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+    TransferImageLayout(
+        cb, tex->mImage, range, VK_IMAGE_LAYOUT_GENERAL,
+        VK_ACCESS_SHADER_WRITE_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_ACCESS_SHADER_READ_BIT,
+        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
+  }
+}
+
+void RenderPass::RecordGraphicsIndirectCommands(VkCommandBuffer cb,
+                                                VulkanBuffer *indirectBuffer) {
+  SCOPED_EVENT(cb, mName.c_str());
+
+  VkClearValue clearValues[2];
+  clearValues[0].color = {{0.0f, 0.0f, 0.0f, 1.0f}};
+  clearValues[1].depthStencil = {1.0f, 0};
+
+  VkRenderPassBeginInfo rpBegin = {};
+  rpBegin.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+  rpBegin.renderPass = mRenderPass;
+  rpBegin.framebuffer = mFrameBuffer;
+  rpBegin.clearValueCount = 2;
+  rpBegin.pClearValues = clearValues;
+  rpBegin.renderArea.extent = {mViewportWidth, mViewportHeight};
+
+  vkCmdBeginRenderPass(cb, &rpBegin, VK_SUBPASS_CONTENTS_INLINE);
+  vkCmdBindPipeline(cb, VK_PIPELINE_BIND_POINT_GRAPHICS, mPSO);
+  vkCmdBindDescriptorSets(cb, VK_PIPELINE_BIND_POINT_GRAPHICS, mPipelineLayout,
+                          0, 1, &mDescriptorSet, 0, nullptr);
+  vkCmdDrawIndirect(cb, indirectBuffer->mBuffer, 0, 1, 16);
+  vkCmdEndRenderPass(cb);
+}
+
 void RenderPass::Execute() {
   VkDevice device = GetVulkanDevice();
   VkCommandBuffer cb = CreateCommandBuffer();
+  if (cb == VK_NULL_HANDLE) {
+    return;
+  }
   BeginCommandBuffer(cb, VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
 
   if (mType == RenderPassType::Compute) {
-    SCOPED_EVENT(cb, mName.c_str());
-
-    vkUpdateDescriptorSets(device,
-                           static_cast<uint32_t>(mWriteDescriptorSets.size()),
-                           mWriteDescriptorSets.data(), 0, nullptr);
-
-    for (auto *tex : mOutputTextures) {
-      VkImageSubresourceRange range = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
-      TransferImageLayout(cb, tex->mImage, range, VK_IMAGE_LAYOUT_UNDEFINED,
-                          VK_ACCESS_NONE, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-                          VK_IMAGE_LAYOUT_GENERAL, VK_ACCESS_SHADER_WRITE_BIT,
-                          VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
-    }
-
-    vkCmdBindPipeline(cb, VK_PIPELINE_BIND_POINT_COMPUTE, mPSO);
-    vkCmdBindDescriptorSets(cb, VK_PIPELINE_BIND_POINT_COMPUTE, mPipelineLayout,
-                            0, 1, &mDescriptorSet, 0, nullptr);
-    vkCmdDispatch(cb, mDispatchX, mDispatchY, mDispatchZ);
-
-    for (auto *tex : mOutputTextures) {
-      VkImageSubresourceRange range = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
-      TransferImageLayout(
-          cb, tex->mImage, range, VK_IMAGE_LAYOUT_GENERAL,
-          VK_ACCESS_SHADER_WRITE_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-          VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_ACCESS_SHADER_READ_BIT,
-          VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
-    }
+    UpdateDescriptorSets();
+    RecordComputeCommands(cb);
   }
 
   vkEndCommandBuffer(cb);
@@ -322,41 +429,20 @@ void RenderPass::Execute() {
   }
 
   vkDestroyFence(device, fence, nullptr);
-  vkFreeCommandBuffers(GetVulkanDevice(), VK_NULL_HANDLE, 0, nullptr);
+  vkFreeCommandBuffers(device, GetVulkanCommandPool(), 1, &cb);
 }
 
 void RenderPass::ExecuteIndirect(VulkanBuffer *indirectBuffer) {
   VkDevice device = GetVulkanDevice();
   VkCommandBuffer cb = CreateCommandBuffer();
+  if (cb == VK_NULL_HANDLE) {
+    return;
+  }
   BeginCommandBuffer(cb, VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
 
-  {
-    SCOPED_EVENT(cb, mName.c_str());
+  UpdateDescriptorSets();
+  RecordGraphicsIndirectCommands(cb, indirectBuffer);
 
-    vkUpdateDescriptorSets(device,
-                           static_cast<uint32_t>(mWriteDescriptorSets.size()),
-                           mWriteDescriptorSets.data(), 0, nullptr);
-
-    VkClearValue clearValues[2];
-    clearValues[0].color = {{0.0f, 0.0f, 0.0f, 1.0f}};
-    clearValues[1].depthStencil = {1.0f, 0};
-
-    VkRenderPassBeginInfo rpBegin = {};
-    rpBegin.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-    rpBegin.renderPass = mRenderPass;
-    rpBegin.framebuffer = mFrameBuffer;
-    rpBegin.clearValueCount = 2;
-    rpBegin.pClearValues = clearValues;
-    rpBegin.renderArea.extent = {mViewportWidth, mViewportHeight};
-
-    vkCmdBeginRenderPass(cb, &rpBegin, VK_SUBPASS_CONTENTS_INLINE);
-    vkCmdBindPipeline(cb, VK_PIPELINE_BIND_POINT_GRAPHICS, mPSO);
-    vkCmdBindDescriptorSets(cb, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                            mPipelineLayout, 0, 1, &mDescriptorSet, 0, nullptr);
-    vkCmdDrawIndirect(cb, indirectBuffer->mBuffer, 0, 1, 16);
-  }
-
-  vkCmdEndRenderPass(cb);
   vkEndCommandBuffer(cb);
 
   VkFence fence;
@@ -378,4 +464,5 @@ void RenderPass::ExecuteIndirect(VulkanBuffer *indirectBuffer) {
   }
 
   vkDestroyFence(device, fence, nullptr);
+  vkFreeCommandBuffers(device, GetVulkanCommandPool(), 1, &cb);
 }
