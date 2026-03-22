@@ -62,6 +62,7 @@ void EndSwapChainRenderPass(VkCommandBuffer cb);
 
 VkQueue GetGraphicQueue();
 VkDevice GetVulkanDevice();
+VkCommandPool GetVulkanCommandPool();
 VkPhysicalDevice GetPhysicalDevice();
 VkRenderPass GetSwapChainRenderPass();
 

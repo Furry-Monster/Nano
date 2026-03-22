@@ -20,17 +20,18 @@ void RenderPass::SetComputeImage(int binding, Texture2D *image, bool isOutput) {
       VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
   mLayoutBindings.push_back(layoutBinding);
 
-  auto *imageInfo = new VkDescriptorImageInfo;
-  imageInfo->imageLayout = VK_IMAGE_LAYOUT_GENERAL;
-  imageInfo->imageView = image->mImageView;
-  imageInfo->sampler = VK_NULL_HANDLE;
+  VkDescriptorImageInfo imageInfo = {};
+  imageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+  imageInfo.imageView = image->mImageView;
+  imageInfo.sampler = VK_NULL_HANDLE;
+  mDescriptorImageInfos.push_back(imageInfo);
 
   VkWriteDescriptorSet write = {};
   write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
   write.descriptorCount = 1;
   write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
   write.dstBinding = binding;
-  write.pImageInfo = imageInfo;
+  write.pImageInfo = &mDescriptorImageInfos.back();
   mWriteDescriptorSets.push_back(write);
 
   mTextures.push_back(image);
@@ -48,17 +49,18 @@ void RenderPass::SetSSBO(int binding, VulkanBuffer *buffer, bool isOutput) {
                              VK_SHADER_STAGE_FRAGMENT_BIT;
   mLayoutBindings.push_back(layoutBinding);
 
-  auto *bufferInfo = new VkDescriptorBufferInfo;
-  bufferInfo->buffer = buffer->mBuffer;
-  bufferInfo->offset = 0;
-  bufferInfo->range = buffer->mSize;
+  VkDescriptorBufferInfo bufferInfo = {};
+  bufferInfo.buffer = buffer->mBuffer;
+  bufferInfo.offset = 0;
+  bufferInfo.range = buffer->mSize;
+  mDescriptorBufferInfos.push_back(bufferInfo);
 
   VkWriteDescriptorSet write = {};
   write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
   write.descriptorCount = 1;
   write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
   write.dstBinding = binding;
-  write.pBufferInfo = bufferInfo;
+  write.pBufferInfo = &mDescriptorBufferInfos.back();
   mWriteDescriptorSets.push_back(write);
 
   mBuffers.push_back(buffer);
@@ -75,17 +77,18 @@ void RenderPass::SetUniformBufferObject(int binding, VulkanBuffer *ubo) {
       VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_COMPUTE_BIT;
   mLayoutBindings.push_back(layoutBinding);
 
-  auto *bufferInfo = new VkDescriptorBufferInfo;
-  bufferInfo->buffer = ubo->mBuffer;
-  bufferInfo->offset = 0;
-  bufferInfo->range = ubo->mSize;
+  VkDescriptorBufferInfo bufferInfo = {};
+  bufferInfo.buffer = ubo->mBuffer;
+  bufferInfo.offset = 0;
+  bufferInfo.range = ubo->mSize;
+  mDescriptorBufferInfos.push_back(bufferInfo);
 
   VkWriteDescriptorSet write = {};
   write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
   write.descriptorCount = 1;
   write.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
   write.dstBinding = binding;
-  write.pBufferInfo = bufferInfo;
+  write.pBufferInfo = &mDescriptorBufferInfos.back();
   mWriteDescriptorSets.push_back(write);
 
   mUniformBuffers.push_back(ubo);
@@ -322,7 +325,7 @@ void RenderPass::Execute() {
   }
 
   vkDestroyFence(device, fence, nullptr);
-  vkFreeCommandBuffers(GetVulkanDevice(), VK_NULL_HANDLE, 0, nullptr);
+  vkFreeCommandBuffers(device, GetVulkanCommandPool(), 1, &cb);
 }
 
 void RenderPass::ExecuteIndirect(VulkanBuffer *indirectBuffer) {
@@ -378,4 +381,5 @@ void RenderPass::ExecuteIndirect(VulkanBuffer *indirectBuffer) {
   }
 
   vkDestroyFence(device, fence, nullptr);
+  vkFreeCommandBuffers(device, GetVulkanCommandPool(), 1, &cb);
 }

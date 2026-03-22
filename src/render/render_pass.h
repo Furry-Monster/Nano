@@ -2,6 +2,7 @@
 
 #include "vulkan_rhi.h"
 
+#include <deque>
 #include <string>
 #include <vector>
 
@@ -29,6 +30,8 @@ public:
 
   std::vector<VkDescriptorSetLayoutBinding> mLayoutBindings;
   std::vector<VkWriteDescriptorSet> mWriteDescriptorSets;
+  std::deque<VkDescriptorBufferInfo> mDescriptorBufferInfos;
+  std::deque<VkDescriptorImageInfo> mDescriptorImageInfos;
   std::vector<Texture2D *> mTextures;
   std::vector<Texture2D *> mOutputTextures;
   std::vector<VulkanBuffer *> mBuffers;

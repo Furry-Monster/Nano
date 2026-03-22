@@ -37,19 +37,29 @@ static uint32_t sCanvasHeight = 720;
 
 static ShaderParameterDescription sUberShaderParams;
 
+static VkPhysicalDeviceMemoryProperties sPhysicalMemProps = {};
+static bool sPhysicalMemPropsCached = false;
+
 static PFN_vkCreateDebugReportCallbackEXT fnCreateDebugReport = nullptr;
 static PFN_vkDestroyDebugReportCallbackEXT fnDestroyDebugReport = nullptr;
 static PFN_vkCmdBeginDebugUtilsLabelEXT fnBeginDebugLabel = nullptr;
 static PFN_vkCmdEndDebugUtilsLabelEXT fnEndDebugLabel = nullptr;
 static PFN_vkSetDebugUtilsObjectNameEXT fnSetObjectName = nullptr;
 
+static void EnsurePhysicalMemProps() {
+  if (!sPhysicalMemPropsCached) {
+    vkGetPhysicalDeviceMemoryProperties(sGPU, &sPhysicalMemProps);
+    sPhysicalMemPropsCached = true;
+  }
+}
+
 static uint32_t FindMemoryType(uint32_t typeFilter,
                                VkMemoryPropertyFlags properties) {
-  VkPhysicalDeviceMemoryProperties memProps;
-  vkGetPhysicalDeviceMemoryProperties(sGPU, &memProps);
-  for (uint32_t i = 0; i < memProps.memoryTypeCount; i++) {
+  EnsurePhysicalMemProps();
+  for (uint32_t i = 0; i < sPhysicalMemProps.memoryTypeCount; i++) {
     if ((typeFilter & (1 << i)) &&
-        (memProps.memoryTypes[i].propertyFlags & properties) == properties) {
+        (sPhysicalMemProps.memoryTypes[i].propertyFlags & properties) ==
+            properties) {
       return i;
     }
   }
@@ -599,6 +609,7 @@ void EndSwapChainRenderPass(VkCommandBuffer cb) {
 
 VkQueue GetGraphicQueue() { return sGraphicQueue; }
 VkDevice GetVulkanDevice() { return sDevice; }
+VkCommandPool GetVulkanCommandPool() { return sCommandPool; }
 VkPhysicalDevice GetPhysicalDevice() { return sGPU; }
 VkRenderPass GetSwapChainRenderPass() { return sSwapChainRenderPass; }
 ShaderParameterDescription *GetUberPassShaderParameterDescription() {
