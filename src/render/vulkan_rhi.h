@@ -12,7 +12,7 @@ struct GlobalConstants {
       float mProjectionMatrix[16];
       float mViewMatrix[16];
       float mModelMatrix[16];
-      unsigned int mMisc0[4];     // x: Manual MipLevel
+      unsigned int mMisc0[4]; // x: MipLevel, y: HZB enable (1/0), z: screenW, w: screenH
       float mCameraPositionWS[4]; // x,y,z,w=lodScale
       float mViewDirectionWS[4];  // x,y,z,w=lodScaleHW
     };
@@ -100,8 +100,16 @@ void TransferImageLayout(VkCommandBuffer cb, VkImage image,
 
 void GenImage(Texture *outTex, int width, int height, VkImageUsageFlags usage,
               VkMemoryPropertyFlagBits memProps);
+/// Full mip chain (mipLevels >= 1). Sets outTex->mFormat before calling.
+void GenImageWithMipLevels(Texture2D *outTex, int width, int height,
+                           uint32_t mipLevels, VkImageUsageFlags usage,
+                           VkMemoryPropertyFlagBits memProps);
 VkImageView GenImageView2D(VkImage image, VkFormat format,
                            VkImageAspectFlags aspect);
+VkImageView GenImageView2DMipRange(VkImage image, VkFormat format,
+                                   VkImageAspectFlags aspect,
+                                   uint32_t baseMipLevel, uint32_t levelCount);
+void SubmitOneTimeCommandBuffer(VkCommandBuffer cb);
 VkSampler
 GenSampler(VkFilter minFilter = VK_FILTER_LINEAR,
            VkFilter magFilter = VK_FILTER_LINEAR,

@@ -8,10 +8,26 @@
 #include "scene_node.h"
 
 #include <GLFW/glfw3.h>
+
+#include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <spdlog/spdlog.h>
+#include <vector>
 
 static constexpr int kBufferSize4MB = 4194304;
+
+static uint32_t CountHzbMipLevels(int width, int height) {
+  uint32_t levels = 1;
+  int w = width;
+  int h = height;
+  while (w > 1 || h > 1) {
+    w = std::max(1, w / 2);
+    h = std::max(1, h / 2);
+    levels++;
+  }
+  return levels;
+}
 
 static float sLODScale, sLODScaleHW;
 static float4 sCameraPosition(-330.0f, 330.0f, -330.0f);
@@ -33,6 +49,18 @@ static RenderPass *sClusterCullPass;
 static RenderPass *sHWRasterizePass;
 static RenderPass *sVisualizePass;
 static SceneNode *sFSQNode;
+
+static Texture2D *sHZBTexture = nullptr;
+static uint32_t sHZBMipLevelCount = 1;
+static std::vector<VkImageView> sHZBStorageMipViews;
+static VkImageView sHZBFullSampleView = VK_NULL_HANDLE;
+static VkSampler sHZBPointSampler = VK_NULL_HANDLE;
+static RenderPass *sBuildHZBMip0Pass = nullptr;
+static std::vector<RenderPass *> sBuildHZBDownsamplePasses;
+
+static int sCanvasW = 1280;
+static int sCanvasH = 720;
+static bool sHzbFromPreviousFrameReady = false;
 
 static int sCurrentMipLevelIndex = 0;
 static constexpr int kAvailableMipLevels[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 10};
@@ -110,8 +138,11 @@ void InitScene(int canvasWidth, int canvasHeight) {
   sGlobalConstantsData.SetProjectionMatrix(sProjectionMatrix.v);
   sGlobalConstantsData.SetViewMatrix(sViewMatrix.v);
   sGlobalConstantsData.SetModelMatrix(sModelMatrix.v);
-  sGlobalConstantsData.SetMisc0(kAvailableMipLevels[sCurrentMipLevelIndex], 0,
-                                0, 0);
+  sCanvasW = canvasWidth;
+  sCanvasH = canvasHeight;
+  sGlobalConstantsData.SetMisc0(
+      kAvailableMipLevels[sCurrentMipLevelIndex], 0u,
+      static_cast<unsigned>(canvasWidth), static_cast<unsigned>(canvasHeight));
 
   float4 viewDir = sCameraTarget - sCameraPosition;
   viewDir.Normalize();
@@ -198,6 +229,64 @@ void InitScene(int canvasWidth, int canvasHeight) {
     SetObjectName(VK_OBJECT_TYPE_BUFFER, sNaniteMesh->mBuffer, "NaniteMesh");
   }
 
+  sHzbFromPreviousFrameReady = false;
+  sHZBMipLevelCount = CountHzbMipLevels(canvasWidth, canvasHeight);
+  sHZBTexture = new Texture2D;
+  sHZBTexture->mFormat = VK_FORMAT_R32_SFLOAT;
+  sHZBTexture->mImageAspectFlag = VK_IMAGE_ASPECT_COLOR_BIT;
+  GenImageWithMipLevels(
+      sHZBTexture, canvasWidth, canvasHeight, sHZBMipLevelCount,
+      VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+      VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+  sHZBTexture->mWidth = canvasWidth;
+  sHZBTexture->mHeight = canvasHeight;
+  sHZBTexture->mChannelCount = 1;
+  SetObjectName(VK_OBJECT_TYPE_IMAGE, sHZBTexture->mImage, "HZB");
+
+  sHZBStorageMipViews.resize(sHZBMipLevelCount);
+  for (uint32_t m = 0; m < sHZBMipLevelCount; m++) {
+    sHZBStorageMipViews[m] = GenImageView2DMipRange(
+        sHZBTexture->mImage, VK_FORMAT_R32_SFLOAT, VK_IMAGE_ASPECT_COLOR_BIT, m,
+        1);
+  }
+  sHZBFullSampleView = GenImageView2DMipRange(
+      sHZBTexture->mImage, VK_FORMAT_R32_SFLOAT, VK_IMAGE_ASPECT_COLOR_BIT, 0,
+      sHZBMipLevelCount);
+  sHZBPointSampler = GenSampler(
+      VK_FILTER_NEAREST, VK_FILTER_NEAREST, VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+      VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE, VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE);
+
+  {
+    VkCommandBuffer clearCb = CreateCommandBuffer();
+    if (clearCb != VK_NULL_HANDLE) {
+      BeginCommandBuffer(clearCb, VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
+      VkImageSubresourceRange hzRange{};
+      hzRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+      hzRange.baseMipLevel = 0;
+      hzRange.levelCount = sHZBMipLevelCount;
+      hzRange.baseArrayLayer = 0;
+      hzRange.layerCount = 1;
+      TransferImageLayout(
+          clearCb, sHZBTexture->mImage, hzRange, VK_IMAGE_LAYOUT_UNDEFINED,
+          VK_ACCESS_NONE, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+          VK_IMAGE_LAYOUT_GENERAL, VK_ACCESS_TRANSFER_WRITE_BIT,
+          VK_PIPELINE_STAGE_TRANSFER_BIT);
+      VkClearColorValue ccv{};
+      ccv.float32[0] = 1.0f;
+      vkCmdClearColorImage(clearCb, sHZBTexture->mImage,
+                           VK_IMAGE_LAYOUT_GENERAL, &ccv, 1, &hzRange);
+      TransferImageLayout(
+          clearCb, sHZBTexture->mImage, hzRange, VK_IMAGE_LAYOUT_GENERAL,
+          VK_ACCESS_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+          VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+          VK_ACCESS_SHADER_READ_BIT,
+          VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT |
+              VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+      vkEndCommandBuffer(clearCb);
+      SubmitOneTimeCommandBuffer(clearCb);
+    }
+  }
+
   // Init pass
   {
     sInitPass = new RenderPass(RenderPassType::Compute, "Init");
@@ -231,6 +320,8 @@ void InitScene(int canvasWidth, int canvasHeight) {
     sNodeAndClusterCullPasses[i]->SetUniformBufferObject(
         5, sGlobalConstantsBuffer);
     sNodeAndClusterCullPasses[i]->SetSSBO(6, sNaniteMesh);
+    sNodeAndClusterCullPasses[i]->SetCombinedImageSampler(
+        7, sHZBFullSampleView, sHZBPointSampler);
     sNodeAndClusterCullPasses[i]->SetCS("shaders/NodeAndClusterCull.sb");
     sNodeAndClusterCullPasses[i]->SetComputeDispatchArgs(1, 1, 1);
     sNodeAndClusterCullPasses[i]->Build();
@@ -272,6 +363,36 @@ void InitScene(int canvasWidth, int canvasHeight) {
     sVisualizePass->Build();
   }
 
+  {
+    sBuildHZBMip0Pass = new RenderPass(RenderPassType::Compute, "BuildHZBMip0");
+    sBuildHZBMip0Pass->SetSSBO(0, sVisBuffer64);
+    sBuildHZBMip0Pass->SetComputeStorageImageView(
+        1, sHZBStorageMipViews[0], false);
+    sBuildHZBMip0Pass->SetUniformBufferObject(2, sGlobalConstantsBuffer);
+    sBuildHZBMip0Pass->SetCS("shaders/BuildHZBMip0.sb");
+    sBuildHZBMip0Pass->SetComputeDispatchArgs(
+        static_cast<int>(std::ceil(static_cast<float>(canvasWidth) / 8.0f)),
+        static_cast<int>(std::ceil(static_cast<float>(canvasHeight) / 8.0f)),
+        1);
+    sBuildHZBMip0Pass->Build();
+  }
+
+  for (uint32_t m = 1; m < sHZBMipLevelCount; m++) {
+    char nm[64];
+    std::snprintf(nm, sizeof(nm), "BuildHZBDown_%u", m);
+    auto *dp = new RenderPass(RenderPassType::Compute, nm);
+    dp->SetComputeStorageImageView(0, sHZBStorageMipViews[m - 1], false);
+    dp->SetComputeStorageImageView(1, sHZBStorageMipViews[m], false);
+    dp->SetCS("shaders/BuildHZBDownsample.sb");
+    const int dw = std::max(1, canvasWidth >> static_cast<int>(m));
+    const int dh = std::max(1, canvasHeight >> static_cast<int>(m));
+    dp->SetComputeDispatchArgs(
+        static_cast<int>(std::ceil(static_cast<float>(dw) / 8.0f)),
+        static_cast<int>(std::ceil(static_cast<float>(dh) / 8.0f)), 1);
+    dp->Build();
+    sBuildHZBDownsamplePasses.push_back(dp);
+  }
+
   // Full-screen quad for swapchain blit
   {
     sFSQNode = new SceneNode;
@@ -300,6 +421,10 @@ void InitScene(int canvasWidth, int canvasHeight) {
 }
 
 void RenderOneFrame([[maybe_unused]] float frameTime) {
+  sGlobalConstantsData.SetMisc0(
+      kAvailableMipLevels[sCurrentMipLevelIndex],
+      sHzbFromPreviousFrameReady ? 1u : 0u,
+      static_cast<unsigned>(sCanvasW), static_cast<unsigned>(sCanvasH));
   BufferSubData(sGlobalConstantsBuffer, &sGlobalConstantsData,
                 sizeof(GlobalConstants));
 
@@ -336,6 +461,57 @@ void RenderOneFrame([[maybe_unused]] float frameTime) {
   CmdBarrierComputeToFragmentSample(cb);
 
   {
+    SCOPED_EVENT(cb, "BuildHZB");
+    VkImageSubresourceRange hzRangeAll{};
+    hzRangeAll.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    hzRangeAll.baseMipLevel = 0;
+    hzRangeAll.levelCount = sHZBMipLevelCount;
+    hzRangeAll.baseArrayLayer = 0;
+    hzRangeAll.layerCount = 1;
+
+    TransferImageLayout(
+        cb, sHZBTexture->mImage, hzRangeAll,
+        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_ACCESS_SHADER_READ_BIT,
+        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_IMAGE_LAYOUT_GENERAL,
+        VK_ACCESS_SHADER_WRITE_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
+
+    sBuildHZBMip0Pass->UpdateDescriptorSets();
+    sBuildHZBMip0Pass->RecordComputeCommands(cb);
+
+    VkImageMemoryBarrier hzBarrier{};
+    hzBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    hzBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    hzBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    hzBarrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+    hzBarrier.dstAccessMask =
+        VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+    hzBarrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
+    hzBarrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+    hzBarrier.image = sHZBTexture->mImage;
+    hzBarrier.subresourceRange = hzRangeAll;
+
+    vkCmdPipelineBarrier(cb, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr,
+                         0, nullptr, 1, &hzBarrier);
+
+    for (auto *dp : sBuildHZBDownsamplePasses) {
+      dp->UpdateDescriptorSets();
+      dp->RecordComputeCommands(cb);
+      vkCmdPipelineBarrier(cb, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                           VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr,
+                           0, nullptr, 1, &hzBarrier);
+    }
+
+    TransferImageLayout(
+        cb, sHZBTexture->mImage, hzRangeAll, VK_IMAGE_LAYOUT_GENERAL,
+        VK_ACCESS_SHADER_WRITE_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_ACCESS_SHADER_READ_BIT,
+        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
+  }
+
+  sHzbFromPreviousFrameReady = true;
+
+  {
     SCOPED_EVENT(cb, "SwapChain");
     CmdBeginSwapChainRenderPass(cb, imageIndex);
     sFSQNode->Draw(cb, GetSwapChainRenderPass(), sProjectionMatrix,
@@ -354,7 +530,9 @@ void OnKeyUp(int keyCode) {
     sCurrentMipLevelIndex =
         (sCurrentMipLevelIndex - 1 + kMipLevelCount) % kMipLevelCount;
   }
-  sGlobalConstantsData.SetMisc0(kAvailableMipLevels[sCurrentMipLevelIndex], 0,
-                                0, 0);
+  sGlobalConstantsData.SetMisc0(
+      kAvailableMipLevels[sCurrentMipLevelIndex],
+      sHzbFromPreviousFrameReady ? 1u : 0u,
+      static_cast<unsigned>(sCanvasW), static_cast<unsigned>(sCanvasH));
   spdlog::info("LOD Mip Level: {}", kAvailableMipLevels[sCurrentMipLevelIndex]);
 }

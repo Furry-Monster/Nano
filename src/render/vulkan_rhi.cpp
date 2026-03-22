@@ -796,16 +796,65 @@ void GenImage(Texture *outTex, int width, int height, VkImageUsageFlags usage,
   }
 }
 
-VkImageView GenImageView2D(VkImage image, VkFormat format,
-                           VkImageAspectFlags aspect) {
+void GenImageWithMipLevels(Texture2D *outTex, int width, int height,
+                           uint32_t mipLevels, VkImageUsageFlags usage,
+                           VkMemoryPropertyFlagBits memProps) {
+  VkImageCreateInfo imgInfo = {};
+  imgInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+  imgInfo.imageType = VK_IMAGE_TYPE_2D;
+  imgInfo.format = outTex->mFormat;
+  imgInfo.extent = {static_cast<uint32_t>(width), static_cast<uint32_t>(height),
+                    1};
+  imgInfo.mipLevels = mipLevels;
+  imgInfo.arrayLayers = 1;
+  imgInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+  imgInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+  imgInfo.usage = usage;
+  imgInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+  imgInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+  if (vkCreateImage(sDevice, &imgInfo, nullptr, &outTex->mImage) !=
+      VK_SUCCESS) {
+    spdlog::error("Failed to create mipmapped image");
+    return;
+  }
+
+  VkMemoryRequirements memReqs;
+  vkGetImageMemoryRequirements(sDevice, outTex->mImage, &memReqs);
+
+  VkMemoryAllocateInfo allocInfo = {};
+  allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+  allocInfo.allocationSize = memReqs.size;
+  allocInfo.memoryTypeIndex = FindMemoryType(memReqs.memoryTypeBits, memProps);
+
+  if (vkAllocateMemory(sDevice, &allocInfo, nullptr, &outTex->mMemory) !=
+      VK_SUCCESS) {
+    spdlog::error("Failed to allocate mipmapped image memory");
+    vkDestroyImage(sDevice, outTex->mImage, nullptr);
+    outTex->mImage = VK_NULL_HANDLE;
+    return;
+  }
+  if (vkBindImageMemory(sDevice, outTex->mImage, outTex->mMemory, 0) !=
+      VK_SUCCESS) {
+    spdlog::error("Failed to bind mipmapped image memory");
+    vkFreeMemory(sDevice, outTex->mMemory, nullptr);
+    vkDestroyImage(sDevice, outTex->mImage, nullptr);
+    outTex->mImage = VK_NULL_HANDLE;
+    outTex->mMemory = VK_NULL_HANDLE;
+  }
+}
+
+VkImageView GenImageView2DMipRange(VkImage image, VkFormat format,
+                                   VkImageAspectFlags aspect,
+                                   uint32_t baseMipLevel,
+                                   uint32_t levelCount) {
   VkImageViewCreateInfo viewInfo = {};
   viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
   viewInfo.image = image;
   viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
   viewInfo.format = format;
   viewInfo.subresourceRange.aspectMask = aspect;
-  viewInfo.subresourceRange.baseMipLevel = 0;
-  viewInfo.subresourceRange.levelCount = 1;
+  viewInfo.subresourceRange.baseMipLevel = baseMipLevel;
+  viewInfo.subresourceRange.levelCount = levelCount;
   viewInfo.subresourceRange.baseArrayLayer = 0;
   viewInfo.subresourceRange.layerCount = 1;
 
@@ -814,6 +863,31 @@ VkImageView GenImageView2D(VkImage image, VkFormat format,
     spdlog::error("Failed to create image view");
   }
   return view;
+}
+
+VkImageView GenImageView2D(VkImage image, VkFormat format,
+                           VkImageAspectFlags aspect) {
+  return GenImageView2DMipRange(image, format, aspect, 0, 1);
+}
+
+void SubmitOneTimeCommandBuffer(VkCommandBuffer cb) {
+  VkFence fence = VK_NULL_HANDLE;
+  VkFenceCreateInfo fenceInfo = {};
+  fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+  if (vkCreateFence(sDevice, &fenceInfo, nullptr, &fence) != VK_SUCCESS) {
+    spdlog::error("Failed to create fence for one-time submit");
+    vkFreeCommandBuffers(sDevice, sCommandPool, 1, &cb);
+    return;
+  }
+
+  VkSubmitInfo submitInfo = {};
+  submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+  submitInfo.commandBufferCount = 1;
+  submitInfo.pCommandBuffers = &cb;
+  vkQueueSubmit(sGraphicQueue, 1, &submitInfo, fence);
+  vkWaitForFences(sDevice, 1, &fence, VK_TRUE, UINT64_MAX);
+  vkDestroyFence(sDevice, fence, nullptr);
+  vkFreeCommandBuffers(sDevice, sCommandPool, 1, &cb);
 }
 
 VkSampler GenSampler(VkFilter minFilter, VkFilter magFilter,

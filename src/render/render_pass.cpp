@@ -39,6 +39,65 @@ void RenderPass::SetComputeImage(int binding, Texture2D *image, bool isOutput) {
     mOutputTextures.push_back(image);
 }
 
+void RenderPass::SetComputeStorageImageView(int binding, VkImageView view,
+                                            bool isOutput) {
+  VkDescriptorSetLayoutBinding layoutBinding = {};
+  layoutBinding.binding = binding;
+  layoutBinding.descriptorCount = 1;
+  layoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+  layoutBinding.stageFlags =
+      VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+  mLayoutBindings.push_back(layoutBinding);
+
+  VkDescriptorImageInfo imageInfo = {};
+  imageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+  imageInfo.imageView = view;
+  imageInfo.sampler = VK_NULL_HANDLE;
+  mDescriptorImageInfos.push_back(imageInfo);
+
+  VkWriteDescriptorSet write = {};
+  write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+  write.descriptorCount = 1;
+  write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+  write.dstBinding = binding;
+  write.pImageInfo = &mDescriptorImageInfos.back();
+  mWriteDescriptorSets.push_back(write);
+
+  mStandaloneStorageImageCount++;
+
+  if (isOutput) {
+    spdlog::warn(
+        "SetComputeStorageImageView: isOutput layout transitions not tracked");
+  }
+}
+
+void RenderPass::SetCombinedImageSampler(int binding, VkImageView imageView,
+                                         VkSampler sampler) {
+  VkDescriptorSetLayoutBinding layoutBinding = {};
+  layoutBinding.binding = binding;
+  layoutBinding.descriptorCount = 1;
+  layoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+  layoutBinding.stageFlags =
+      VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+  mLayoutBindings.push_back(layoutBinding);
+
+  VkDescriptorImageInfo imageInfo = {};
+  imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+  imageInfo.imageView = imageView;
+  imageInfo.sampler = sampler;
+  mDescriptorImageInfos.push_back(imageInfo);
+
+  VkWriteDescriptorSet write = {};
+  write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+  write.descriptorCount = 1;
+  write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+  write.dstBinding = binding;
+  write.pImageInfo = &mDescriptorImageInfos.back();
+  mWriteDescriptorSets.push_back(write);
+
+  mCombinedImageSamplerCount++;
+}
+
 void RenderPass::SetSSBO(int binding, VulkanBuffer *buffer, bool isOutput) {
   VkDescriptorSetLayoutBinding layoutBinding = {};
   layoutBinding.binding = binding;
@@ -121,13 +180,19 @@ void RenderPass::Build(uint32_t canvasWidth, uint32_t canvasHeight) {
     poolSizes.push_back({VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
                          static_cast<uint32_t>(mUniformBuffers.size())});
   }
-  if (!mTextures.empty()) {
-    poolSizes.push_back({VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-                         static_cast<uint32_t>(mTextures.size())});
+  const uint32_t storageImageDescCount =
+      static_cast<uint32_t>(mTextures.size() + mStandaloneStorageImageCount);
+  if (storageImageDescCount > 0) {
+    poolSizes.push_back(
+        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, storageImageDescCount});
   }
   if (!mBuffers.empty()) {
     poolSizes.push_back({VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
                          static_cast<uint32_t>(mBuffers.size())});
+  }
+  if (mCombinedImageSamplerCount > 0) {
+    poolSizes.push_back({VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                         mCombinedImageSamplerCount});
   }
 
   VkDescriptorPoolCreateInfo poolInfo = {};

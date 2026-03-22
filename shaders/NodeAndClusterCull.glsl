@@ -40,7 +40,7 @@ layout(binding = 5) uniform GlobalConstants {
     mat4 mProjectionMatrix;
     mat4 mViewMatrix;
     mat4 mModelMatrix;
-    uvec4 mMisc0; // x: Manual MipLevel
+    uvec4 mMisc0; // x: MipLevel, y: HZB on, z: screenW, w: screenH
     vec4 mNanite_ViewOrigin; // xyz: camera pos, w: lodScale
     vec4 mNanite_ViewForward; // xyz: view dir, w: lodScaleHW
 } U_GlobalConstants;
@@ -48,6 +48,8 @@ layout(binding = 5) uniform GlobalConstants {
 layout(std430, binding = 6) readonly buffer FNaniteMesh {
     uint mData[];
 } NaniteMesh;
+
+layout(binding = 7) uniform sampler2D s_HZB;
 
 uint BitFieldExtractU32(uint Data, uint Size, uint Offset) {
     Size &= 31;
@@ -127,8 +129,89 @@ FHierarchyNodeSlice GetHierarchyNodeSlice(uint NodeIndex, uint ChildIndex) {
     return UnpackHierarchyNodeSlice(RawData0, RawData1, RawData2, RawData3);
 }
 
+// Previous-frame hierarchical Z (max depth per tile). Object is occluded if its
+// nearest projected depth exceeds the max depth stored in the HZB region.
+bool IsNodeOccludedHZB(FHierarchyNodeSlice slice) {
+    vec3 c = slice.BoxBoundsCenter;
+    vec3 e = slice.BoxBoundsExtent;
+    uvec2 screenSize = U_GlobalConstants.mMisc0.zw;
+    if (screenSize.x < 2u || screenSize.y < 2u) {
+        return false;
+    }
+
+    float minPx = 1e20;
+    float maxPx = -1e20;
+    float minPy = 1e20;
+    float maxPy = -1e20;
+    float zObjMin = 1e20;
+    bool anyIn = false;
+
+    for (int i = 0; i < 8; i++) {
+        vec3 o = vec3(
+                (i & 1) != 0 ? e.x : -e.x,
+                (i & 2) != 0 ? e.y : -e.y,
+                (i & 4) != 0 ? e.z : -e.z);
+        vec3 wp = (U_GlobalConstants.mModelMatrix * vec4(c + o, 1.0)).xyz;
+        vec3 rel = wp - U_GlobalConstants.mNanite_ViewOrigin.xyz;
+        vec4 v = U_GlobalConstants.mViewMatrix * vec4(rel, 1.0);
+        vec4 clip = U_GlobalConstants.mProjectionMatrix * v;
+        if (clip.w <= 1e-4) {
+            continue;
+        }
+        vec3 ndc = clip.xyz / clip.w;
+        if (abs(ndc.x) > 1.5 || abs(ndc.y) > 1.5) {
+            return false;
+        }
+        float sx = (ndc.x * 0.5 + 0.5) * float(screenSize.x - 1u);
+        float sy = (ndc.y * 0.5 + 0.5) * float(screenSize.y - 1u);
+        minPx = min(minPx, sx);
+        maxPx = max(maxPx, sx);
+        minPy = min(minPy, sy);
+        maxPy = max(maxPy, sy);
+        float z01 = ndc.z * 0.5 + 0.5;
+        zObjMin = min(zObjMin, z01);
+        anyIn = true;
+    }
+
+    if (!anyIn) {
+        return false;
+    }
+
+    minPx = clamp(minPx, 0.0, float(screenSize.x - 1u));
+    maxPx = clamp(maxPx, 0.0, float(screenSize.x - 1u));
+    minPy = clamp(minPy, 0.0, float(screenSize.y - 1u));
+    maxPy = clamp(maxPy, 0.0, float(screenSize.y - 1u));
+
+    float wPix = max(maxPx - minPx, 1.0);
+    float hPix = max(maxPy - minPy, 1.0);
+    float maxDim = max(wPix, hPix);
+    int lod = int(floor(log2(maxDim)));
+    const int kHzbMaxMip = 15;
+    lod = clamp(lod, 0, kHzbMaxMip);
+
+    float sc = exp2(-float(lod));
+    ivec2 tl = ivec2(floor(vec2(minPx, minPy) * sc));
+    ivec2 br = ivec2(ceil(vec2(maxPx, maxPy) * sc));
+    ivec2 msz = textureSize(s_HZB, lod);
+    tl = clamp(tl, ivec2(0), msz - ivec2(1));
+    br = clamp(br, ivec2(0), msz - ivec2(1));
+
+    float hzMax = 0.0;
+    for (int yy = tl.y; yy <= br.y; yy++) {
+        for (int xx = tl.x; xx <= br.x; xx++) {
+            hzMax = max(hzMax, texelFetch(s_HZB, ivec2(xx, yy), lod).r);
+        }
+    }
+
+    const float bias = 0.0005;
+    return zObjMin > hzMax + bias;
+}
+
 bool ShouldVisitChild(FHierarchyNodeSlice slice) {
-    return true;
+    if (U_GlobalConstants.mMisc0.y == 0u) {
+        return true;
+    }
+    return !IsNodeOccludedHZB(slice);
 }
 
 void main() {
@@ -149,7 +232,7 @@ void main() {
             FHierarchyNodeSlice slice = GetHierarchyNodeSlice(currentNodeIndex, i);
             uint currentSliceMipLevel = slice.NumPages;
 
-            if (slice.bEnabled) {
+            if (slice.bEnabled && ShouldVisitChild(slice)) {
                 if (!slice.bLeaf) {
                     MainAndPostNodeAndClusterBatches.mData[nodeOutputOffset] =
                         slice.ChildStartReference;
