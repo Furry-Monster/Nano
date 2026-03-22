@@ -27,7 +27,9 @@ cmake --build build
 cd bin && ./Nano
 ```
 
-Use **Up/Down** arrow keys to switch LOD mip levels.
+**Camera (FPS):** move **W A S D**, look with **mouse** (cursor captured). **Space** up, **Left Ctrl** down. **Esc** release / recapture mouse. **M** toggles **automatic distance LOD** vs **manual** LOD; in manual mode use **Up/Down** to pick mip (same discrete values as before).
+
+LOD auto mode uses distance from the camera to the reference point `(0, 80, 0)` (roughly the old look target) to pick among the mesh’s stored mip levels. While the camera moves or turns, **HZB occlusion is disabled** for that frame so the previous-frame depth pyramid does not incorrectly cull geometry.
 
 ## Dependencies
 
@@ -61,10 +63,9 @@ libs/                   - Third-party libraries (GLFW, GLM, ImGui, spdlog, stb)
 6. **BuildHZB** (Compute) - Mip0 from VisBuffer64 depth, then max-reduction mips (previous-frame occlusion pyramid for step 2)
 7. **SwapChain** (Graphics) - Blit visualization texture to screen
 
-`GlobalConstants.mMisc0`: **x** = manual LOD mip, **y** = HZB occlusion (0 first frame / warmup, 1 once prior frame depth exists), **z/w** = screen size for projection tests.
+`GlobalConstants.mMisc0`: **x** = LOD mip (auto distance or manual), **y** = HZB occlusion (0 first frame / camera moved / warmup, 1 when previous-frame HZB is valid), **z/w** = screen size for projection tests.
 
 ## TODO
 
 1. Using Multithreading for BVH traversal and other tasks.
-3. Implement LOD selection based on distance to camera (maybe also a roaming camera...).
-4. Finish the exporter module to support exporting BVH and NaniteMesh data.
+2. Finish the exporter module to support exporting BVH and NaniteMesh data.

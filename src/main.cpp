@@ -1,3 +1,4 @@
+#include "input/input.h"
 #include "render/vulkan_rhi.h"
 #include "scene/scene.h"
 
@@ -12,7 +13,9 @@ static constexpr int kWindowHeight = 720;
 static void KeyCallback([[maybe_unused]] GLFWwindow *window, int key,
                         [[maybe_unused]] int scancode, int action,
                         [[maybe_unused]] int mods) {
-  if (action == GLFW_RELEASE) {
+  if (action == GLFW_PRESS) {
+    OnKeyDown(key);
+  } else if (action == GLFW_RELEASE) {
     OnKeyUp(key);
   }
 }
@@ -46,6 +49,7 @@ int main() {
   }
 
   InitScene(kWindowWidth, kWindowHeight);
+  InputAttach(window);
 
   auto lastTime = std::chrono::high_resolution_clock::now();
 
@@ -57,6 +61,7 @@ int main() {
         std::chrono::duration<float>(currentTime - lastTime).count();
     lastTime = currentTime;
 
+    InputPoll(window, deltaTime);
     RenderOneFrame(deltaTime);
   }
 

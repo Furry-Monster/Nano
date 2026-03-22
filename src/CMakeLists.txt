@@ -1,6 +1,8 @@
 set(NANO_SOURCES
     main.cpp
 
+    input/input.cpp
+
     math/float4.cpp
     math/matrix4.cpp
     math/quaternion.cpp
