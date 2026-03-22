@@ -4,7 +4,11 @@ A Vulkan-based virtual geometry system inspired by UE5 Nanite.
 
 Implements BVH-based LOD selection, cluster culling, hardware rasterization with VisBuffer, and per-cluster visualization.
 
+LOD 0:
 ![demo](demo.png)
+
+LOD 3:
+![demo_1](demo_1.png)
 
 ## Build
 
@@ -41,6 +45,7 @@ src/
   math/                 - Custom math library (float4, matrix4, quaternion)
   render/               - Vulkan RHI, render passes, materials, meshes
   scene/                - Scene management and node hierarchy
+  exporter/             - Nanite BVH & NaniteMesh exporter (still under development)
 shaders/                - GLSL compute and graphics shaders
 res/                    - Runtime assets (BVH, Nanite mesh data)
 libs/                   - Third-party libraries (GLFW, GLM, ImGui, spdlog, stb)
@@ -54,3 +59,10 @@ libs/                   - Third-party libraries (GLFW, GLM, ImGui, spdlog, stb)
 4. **HWRasterize** (Graphics, Indirect) - Rasterize clusters, write depth+clusterID to VisBuffer64 via atomicMin
 5. **Visualize** (Compute) - Convert VisBuffer64 cluster IDs to colors via MurmurHash
 6. **SwapChain** (Graphics) - Blit visualization texture to screen
+
+## TODO
+
+1. Add HZB for cluster culling.
+2. Using Multithreading for BVH traversal and other tasks.
+3. Implement LOD selection based on distance to camera (maybe also a roaming camera...).
+4. Finish the exporter module to support exporting BVH and NaniteMesh data.

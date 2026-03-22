@@ -150,7 +150,9 @@ void InitScene(int canvasWidth, int canvasHeight) {
 
   {
     size_t fileSize = 0;
-    unsigned char *data = LoadFileContent("res/mitsuba.bvh", fileSize);
+    unsigned char *data = nullptr;
+
+    data = LoadFileContent("res/mitsuba.bvh", fileSize);
     sBVHBuffer = GenBufferObject(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
                                  VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, data,
                                  static_cast<int>(fileSize));
