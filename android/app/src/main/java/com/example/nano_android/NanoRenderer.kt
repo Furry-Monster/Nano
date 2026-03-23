@@ -10,10 +10,17 @@ object NanoRenderer {
     }
 
     external fun nativeInit(assetManager: AssetManager)
+    external fun nativeSetModelPaths(bvhPath: String, meshPath: String)
+    external fun nativeExportModel(inputPath: String, outputDir: String): String
     external fun nativeSurfaceCreated(surface: Surface, width: Int, height: Int)
     external fun nativeSurfaceDestroyed()
     external fun nativeOnTouch(action: Int, pointerCount: Int, x: Float, y: Float)
     external fun nativeDestroy()
+
+    external fun nativeToggleAutoLOD()
+    external fun nativeLODUp()
+    external fun nativeLODDown()
+    external fun nativeGetStats(): String
 
     fun handleTouchEvent(event: MotionEvent): Boolean {
         val action = when (event.actionMasked) {

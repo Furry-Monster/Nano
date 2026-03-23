@@ -13,6 +13,9 @@
 #include "render/vulkan_rhi.h"
 #include "scene/scene.h"
 #include "input/input.h"
+#include "exporter/export_android.h"
+
+#include <sstream>
 
 static ANativeWindow *sNativeWindow = nullptr;
 static std::atomic<bool> sRunning{false};
@@ -24,6 +27,9 @@ static int sSurfaceHeight = 0;
 
 static const char *kDefaultBvh = "res/Mitsuba/mitsuba.bvh";
 static const char *kDefaultMesh = "res/Mitsuba/mitsuba.nanomesh";
+
+static std::string sBvhPath = kDefaultBvh;
+static std::string sMeshPath = kDefaultMesh;
 
 static void InitSpdlogAndroid() {
     auto sink = std::make_shared<spdlog::sinks::android_sink_mt>("Nano");
@@ -49,8 +55,7 @@ static void RenderThreadFunc() {
     }
 
     try {
-        InitScene(sSurfaceWidth, sSurfaceHeight,
-                  std::string(kDefaultBvh), std::string(kDefaultMesh));
+        InitScene(sSurfaceWidth, sSurfaceHeight, sBvhPath, sMeshPath);
     } catch (const std::exception &e) {
         spdlog::error("InitScene failed: {}", e.what());
         return;
@@ -85,6 +90,21 @@ Java_com_example_nano_1android_NanoRenderer_nativeInit(
     SetAndroidAssetManager(mgr);
     InputInitFromLookAt(-330.0f, 330.0f, -330.0f, 0.0f, 80.0f, 0.0f);
     spdlog::info("Native init complete");
+}
+
+JNIEXPORT void JNICALL
+Java_com_example_nano_1android_NanoRenderer_nativeSetModelPaths(
+    JNIEnv *env, jobject, jstring bvhPath, jstring meshPath) {
+    if (bvhPath && meshPath) {
+        const char *bvh = env->GetStringUTFChars(bvhPath, nullptr);
+        const char *mesh = env->GetStringUTFChars(meshPath, nullptr);
+        if (bvh && mesh) {
+            sBvhPath = bvh;
+            sMeshPath = mesh;
+            env->ReleaseStringUTFChars(bvhPath, bvh);
+            env->ReleaseStringUTFChars(meshPath, mesh);
+        }
+    }
 }
 
 JNIEXPORT void JNICALL
@@ -134,6 +154,50 @@ Java_com_example_nano_1android_NanoRenderer_nativeDestroy(JNIEnv *, jobject) {
         sRenderThread.join();
     }
     spdlog::info("Native destroy complete");
+}
+
+JNIEXPORT void JNICALL
+Java_com_example_nano_1android_NanoRenderer_nativeToggleAutoLOD(JNIEnv *, jobject) {
+    if (sInitialized.load()) SceneToggleAutoLOD();
+}
+
+JNIEXPORT void JNICALL
+Java_com_example_nano_1android_NanoRenderer_nativeLODUp(JNIEnv *, jobject) {
+    if (sInitialized.load()) SceneLODUp();
+}
+
+JNIEXPORT void JNICALL
+Java_com_example_nano_1android_NanoRenderer_nativeLODDown(JNIEnv *, jobject) {
+    if (sInitialized.load()) SceneLODDown();
+}
+
+JNIEXPORT jstring JNICALL
+Java_com_example_nano_1android_NanoRenderer_nativeExportModel(
+    JNIEnv *env, jobject, jstring inputPath, jstring outputDir) {
+    const char *inp = env->GetStringUTFChars(inputPath, nullptr);
+    const char *outp = env->GetStringUTFChars(outputDir, nullptr);
+    std::string err;
+    if (inp && outp) {
+        err = ExportModelAndroid(std::string(inp), std::string(outp));
+    } else {
+        err = "Invalid paths";
+    }
+    if (inp) env->ReleaseStringUTFChars(inputPath, inp);
+    if (outp) env->ReleaseStringUTFChars(outputDir, outp);
+    return env->NewStringUTF(err.empty() ? "OK" : err.c_str());
+}
+
+JNIEXPORT jstring JNICALL
+Java_com_example_nano_1android_NanoRenderer_nativeGetStats(JNIEnv *env, jobject) {
+    if (!sInitialized.load()) {
+        return env->NewStringUTF("Initializing...");
+    }
+    SceneStats stats = SceneGetStats();
+    std::ostringstream oss;
+    oss << "FPS: " << static_cast<int>(stats.fps + 0.5f)
+        << "\nLOD: " << (stats.autoLod ? "auto" : "manual") << " (" << stats.lodMipValue << ")"
+        << "\nCam: " << static_cast<int>(stats.camX) << "," << static_cast<int>(stats.camY) << "," << static_cast<int>(stats.camZ);
+    return env->NewStringUTF(oss.str().c_str());
 }
 
 }

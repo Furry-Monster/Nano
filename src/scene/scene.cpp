@@ -77,6 +77,9 @@ static constexpr int kMipLevelCount =
 static bool sAutoDistanceLod = true;
 static const float4 kSceneLodReference(0.f, 80.f, 0.f, 1.f);
 
+static float sSmoothedFps = 0.f;
+static uint32_t sLastLodMipValue = 0;
+
 static void SyncSceneCameraFromInput() {
   const float4 worldUp(0.f, 1.f, 0.f, 0.f);
   const float4 pos = InputCameraPosition(); // NOLINT
@@ -104,6 +107,41 @@ static uint32_t LodValueFromCameraDistance() {
 
 static unsigned char *LoadFileContent(const char *path, size_t &outSize) {
 #ifdef __ANDROID__
+  // Absolute path: load from filesystem (imported models)
+  if (path[0] == '/') {
+    FILE *file = std::fopen(path, "rb");
+    if (!file) {
+      spdlog::error("Failed to open file: {}", path);
+      outSize = 0;
+      return nullptr;
+    }
+    if (std::fseek(file, 0, SEEK_END) != 0) {
+      std::fclose(file);
+      outSize = 0;
+      return nullptr;
+    }
+    const long sizeLong = std::ftell(file);
+    if (sizeLong < 0) {
+      std::fclose(file);
+      outSize = 0;
+      return nullptr;
+    }
+    outSize = static_cast<size_t>(sizeLong);
+    if (std::fseek(file, 0, SEEK_SET) != 0 || outSize == 0) {
+      std::fclose(file);
+      return nullptr;
+    }
+    auto *content = new unsigned char[outSize];
+    const size_t read = std::fread(content, 1, outSize, file);
+    std::fclose(file);
+    if (read != outSize) {
+      delete[] content;
+      outSize = 0;
+      return nullptr;
+    }
+    return content;
+  }
+  // Asset path: load from APK assets
   AAssetManager *mgr = GetAndroidAssetManager();
   AAsset *asset = AAssetManager_open(mgr, path, AASSET_MODE_BUFFER);
   if (!asset) {
@@ -492,19 +530,56 @@ void InitScene(int canvasWidth, int canvasHeight, const std::string &bvhPath,
   spdlog::info("Scene initialized");
 }
 
+void SceneToggleAutoLOD() {
+  sAutoDistanceLod = !sAutoDistanceLod;
+  spdlog::info("LOD: {}", sAutoDistanceLod ? "auto (distance to reference)"
+                                           : "manual (Up / Down arrows)");
+}
+
+void SceneLODUp() {
+  if (!sAutoDistanceLod) {
+    sCurrentMipLevelIndex = (sCurrentMipLevelIndex + 1) % kMipLevelCount;
+    spdlog::info("Manual LOD mip value: {}",
+                 kAvailableMipLevels[sCurrentMipLevelIndex]);
+  }
+}
+
+void SceneLODDown() {
+  if (!sAutoDistanceLod) {
+    sCurrentMipLevelIndex =
+        (sCurrentMipLevelIndex - 1 + kMipLevelCount) % kMipLevelCount;
+    spdlog::info("Manual LOD mip value: {}",
+                 kAvailableMipLevels[sCurrentMipLevelIndex]);
+  }
+}
+
+SceneStats SceneGetStats() {
+  SceneStats s;
+  s.fps = sSmoothedFps;
+  s.lodMipValue = sLastLodMipValue;
+  s.autoLod = sAutoDistanceLod;
+  const float4 &pos = InputCameraPosition();
+  s.camX = pos.x;
+  s.camY = pos.y;
+  s.camZ = pos.z;
+  return s;
+}
+
 void OnKeyDown(int keyCode) {
 #ifndef __ANDROID__
   if (keyCode == GLFW_KEY_M) {
-    sAutoDistanceLod = !sAutoDistanceLod;
-    spdlog::info("LOD: {}", sAutoDistanceLod ? "auto (distance to reference)"
-                                             : "manual (Up / Down arrows)");
+    SceneToggleAutoLOD();
   }
 #else
   (void)keyCode;
 #endif
 }
 
-void RenderOneFrame([[maybe_unused]] float frameTime) {
+void RenderOneFrame(float frameTime) {
+  if (frameTime > 1e-6f) {
+    const float instantFps = 1.f / frameTime;
+    sSmoothedFps = sSmoothedFps * 0.9f + instantFps * 0.1f;
+  }
   SyncSceneCameraFromInput();
   const uint32_t lodMipValue =
       sAutoDistanceLod
@@ -512,6 +587,7 @@ void RenderOneFrame([[maybe_unused]] float frameTime) {
           : static_cast<uint32_t>(kAvailableMipLevels[sCurrentMipLevelIndex]);
   const uint32_t hzbEnable =
       (sHzbFromPreviousFrameReady && !InputCameraMovedThisFrame()) ? 1u : 0u;
+  sLastLodMipValue = lodMipValue;
   sGlobalConstantsData.SetMisc0(lodMipValue, hzbEnable,
                                 static_cast<unsigned>(sCanvasW),
                                 static_cast<unsigned>(sCanvasH));
@@ -619,15 +695,10 @@ void OnKeyUp(int keyCode) {
 #ifndef __ANDROID__
   if (!sAutoDistanceLod) {
     if (keyCode == GLFW_KEY_UP) {
-      sCurrentMipLevelIndex = (sCurrentMipLevelIndex + 1) % kMipLevelCount;
+      SceneLODUp();
     } else if (keyCode == GLFW_KEY_DOWN) {
-      sCurrentMipLevelIndex =
-          (sCurrentMipLevelIndex - 1 + kMipLevelCount) % kMipLevelCount;
-    } else {
-      return;
+      SceneLODDown();
     }
-    spdlog::info("Manual LOD mip value: {}",
-                 kAvailableMipLevels[sCurrentMipLevelIndex]);
   }
 #else
   (void)keyCode;
