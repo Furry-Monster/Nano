@@ -6,7 +6,7 @@ void InputInitFromLookAt(float eyeX, float eyeY, float eyeZ, float targetX,
                          float targetY, float targetZ);
 
 #ifdef __ANDROID__
-void InputOnTouchEvent(int action, float x, float y);
+void InputOnTouchEvent(int action, int pointerCount, float x, float y);
 void InputPollAndroid(float deltaTime);
 #else
 struct GLFWwindow;

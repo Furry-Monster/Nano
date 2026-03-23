@@ -377,7 +377,10 @@ static bool InitSwapchain() {
   info.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 #ifdef __ANDROID__
   info.compositeAlpha = VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR;
-  info.preTransform = sSurfaceCaps.currentTransform;
+  if (sSurfaceCaps.supportedTransforms & VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR)
+    info.preTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
+  else
+    info.preTransform = sSurfaceCaps.currentTransform;
 #else
   info.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
   info.preTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
@@ -599,13 +602,9 @@ bool InitVulkan(GLFWwindow *window, int canvasWidth, int canvasHeight) {
     return false;
 
   InitSurfaceProperties();
-#ifdef __ANDROID__
-  if (sSurfaceCaps.currentExtent.width != 0xFFFFFFFF) {
-    sCanvasWidth = sSurfaceCaps.currentExtent.width;
-    sCanvasHeight = sSurfaceCaps.currentExtent.height;
-    spdlog::info("Using surface extent: {}x{}", sCanvasWidth, sCanvasHeight);
-  }
-#endif
+  spdlog::info("Surface extent: {}x{}, canvas: {}x{}",
+               sSurfaceCaps.currentExtent.width,
+               sSurfaceCaps.currentExtent.height, sCanvasWidth, sCanvasHeight);
   if (!InitSwapchain()) {
     spdlog::error("Swapchain initialization failed");
     return false;

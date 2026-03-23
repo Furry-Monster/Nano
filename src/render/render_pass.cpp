@@ -132,8 +132,9 @@ void RenderPass::SetUniformBufferObject(int binding, VulkanBuffer *ubo) {
   layoutBinding.binding = binding;
   layoutBinding.descriptorCount = 1;
   layoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-  layoutBinding.stageFlags =
-      VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_COMPUTE_BIT;
+  layoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT |
+                             VK_SHADER_STAGE_COMPUTE_BIT |
+                             VK_SHADER_STAGE_FRAGMENT_BIT;
   mLayoutBindings.push_back(layoutBinding);
 
   VkDescriptorBufferInfo bufferInfo = {};

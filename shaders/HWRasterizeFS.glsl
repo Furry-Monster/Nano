@@ -1,5 +1,14 @@
 #version 450
 
+layout(binding = 0) uniform GlobalConstants {
+    mat4 mProjectionMatrix;
+    mat4 mViewMatrix;
+    mat4 mModelMatrix;
+    uvec4 mMisc0;
+    vec4 mNanite_ViewOrigin;
+    vec4 mNanite_ViewForward;
+} U_GlobalConstants;
+
 layout(std430, binding = 3) buffer FVisBufferDepth {
     uint mData[];
 } VisBufferDepth;
@@ -17,7 +26,8 @@ void main() {
     uint depthBits = floatBitsToUint(z);
     uint clusterInfo = V_PackedData.x;
 
-    int pixelIndex = texcoord.y * 1280 + texcoord.x;
+    int screenW = int(U_GlobalConstants.mMisc0.z);
+    int pixelIndex = texcoord.y * screenW + texcoord.x;
 
     uint oldDepth = atomicMin(VisBufferDepth.mData[pixelIndex], depthBits);
     if (depthBits <= oldDepth) {

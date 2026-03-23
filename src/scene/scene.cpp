@@ -359,6 +359,7 @@ void InitScene(int canvasWidth, int canvasHeight, const std::string &bvhPath,
     sInitPass->SetSSBO(2, sMainAndPostNodeAndClusterBatches, true);
     sInitPass->SetSSBO(3, sVisBufferDepth, true);
     sInitPass->SetSSBO(4, sVisBufferID, true);
+    sInitPass->SetUniformBufferObject(5, sGlobalConstantsBuffer);
     sInitPass->SetCS("shaders/Init.sb");
     sInitPass->SetComputeDispatchArgs(
         static_cast<int>(std::ceil(static_cast<float>(canvasWidth) / 8.0f)),
@@ -425,6 +426,7 @@ void InitScene(int canvasWidth, int canvasHeight, const std::string &bvhPath,
     sVisualizePass = new RenderPass(RenderPassType::Compute, "Visualize");
     sVisualizePass->SetSSBO(0, sVisBufferID);
     sVisualizePass->SetComputeImage(1, sVisualizationTexture, true);
+    sVisualizePass->SetUniformBufferObject(2, sGlobalConstantsBuffer);
     sVisualizePass->SetCS("shaders/Visualize.sb");
     sVisualizePass->SetComputeDispatchArgs(
         static_cast<int>(std::ceil(static_cast<float>(canvasWidth) / 8.0f)),

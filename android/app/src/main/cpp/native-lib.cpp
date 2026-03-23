@@ -122,9 +122,9 @@ Java_com_example_nano_1android_NanoRenderer_nativeSurfaceDestroyed(
 
 JNIEXPORT void JNICALL
 Java_com_example_nano_1android_NanoRenderer_nativeOnTouch(
-    JNIEnv *, jobject, jint action, jfloat x, jfloat y) {
-    InputOnTouchEvent(static_cast<int>(action), static_cast<float>(x),
-                      static_cast<float>(y));
+    JNIEnv *, jobject, jint action, jint pointerCount, jfloat x, jfloat y) {
+    InputOnTouchEvent(static_cast<int>(action), static_cast<int>(pointerCount),
+                      static_cast<float>(x), static_cast<float>(y));
 }
 
 JNIEXPORT void JNICALL

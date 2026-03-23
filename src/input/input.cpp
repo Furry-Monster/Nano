@@ -47,16 +47,24 @@ static constexpr float kTouchSensitivity = 0.004f;
 static constexpr int kActionDown = 0;
 static constexpr int kActionUp = 1;
 static constexpr int kActionMove = 2;
+static constexpr int kActionPointerDown = 3;
+static constexpr int kActionPointerUp = 4;
 static bool sTouchActive = false;
 static int sTouchFingerCount = 0;
 
-void InputOnTouchEvent(int action, float x, float y) {
+void InputOnTouchEvent(int action, int pointerCount, float x, float y) {
   if (action == kActionDown) {
     sLastMouseX = x;
     sLastMouseY = y;
     sFirstMouse = false;
     sTouchActive = true;
-    sTouchFingerCount = 1;
+    sTouchFingerCount = pointerCount;
+    return;
+  }
+  if (action == kActionPointerDown) {
+    sTouchFingerCount = pointerCount;
+    sLastMouseX = x;
+    sLastMouseY = y;
     return;
   }
   if (action == kActionUp) {
@@ -64,7 +72,14 @@ void InputOnTouchEvent(int action, float x, float y) {
     sTouchFingerCount = 0;
     return;
   }
+  if (action == kActionPointerUp) {
+    sTouchFingerCount = pointerCount - 1;
+    sLastMouseX = x;
+    sLastMouseY = y;
+    return;
+  }
   if (action == kActionMove && sTouchActive) {
+    sTouchFingerCount = pointerCount;
     if (sFirstMouse) {
       sLastMouseX = x;
       sLastMouseY = y;
@@ -78,10 +93,12 @@ void InputOnTouchEvent(int action, float x, float y) {
     if (std::fabs(dx) + std::fabs(dy) < 0.5) {
       return;
     }
-    sCameraMovedThisFrame = true;
-    sYawRadians -= static_cast<float>(dx) * kTouchSensitivity;
-    sPitchRadians -= static_cast<float>(dy) * kTouchSensitivity;
-    sPitchRadians = std::clamp(sPitchRadians, -1.45f, 1.45f);
+    if (sTouchFingerCount == 1) {
+      sCameraMovedThisFrame = true;
+      sYawRadians -= static_cast<float>(dx) * kTouchSensitivity;
+      sPitchRadians -= static_cast<float>(dy) * kTouchSensitivity;
+      sPitchRadians = std::clamp(sPitchRadians, -1.45f, 1.45f);
+    }
   }
 }
 

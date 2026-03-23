@@ -8,6 +8,15 @@ layout(std430, binding = 0) buffer FVisBufferID {
 
 layout(binding = 1, rgba32f) uniform image2D VisualizeTexture;
 
+layout(binding = 2) uniform GlobalConstants {
+    mat4 mProjectionMatrix;
+    mat4 mViewMatrix;
+    mat4 mModelMatrix;
+    uvec4 mMisc0;
+    vec4 mNanite_ViewOrigin;
+    vec4 mNanite_ViewForward;
+} UBO;
+
 uint MurmurMix(uint Hash) {
     Hash ^= Hash >> 16;
     Hash *= 0x85ebca6b;
@@ -28,13 +37,15 @@ vec3 IntToColor(uint Index) {
 }
 
 void main() {
+    uint screenW = UBO.mMisc0.z;
+    uint screenH = UBO.mMisc0.w;
     ivec2 texcoord = ivec2(gl_GlobalInvocationID.xy);
-    if (any(greaterThanEqual(texcoord, ivec2(1280, 720)))) {
+    if (texcoord.x >= int(screenW) || texcoord.y >= int(screenH)) {
         return;
     }
 
     vec3 color = vec3(0.0, 0.0, 0.0);
-    int pixelIndex = texcoord.y * 1280 + texcoord.x;
+    int pixelIndex = texcoord.y * int(screenW) + texcoord.x;
 
     uint packedClusterInfo = VisBufferID.mData[pixelIndex];
 
