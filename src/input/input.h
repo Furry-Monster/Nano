@@ -2,14 +2,19 @@
 
 #include "math/float4.h"
 
-struct GLFWwindow;
-
 void InputInitFromLookAt(float eyeX, float eyeY, float eyeZ, float targetX,
                          float targetY, float targetZ);
+
+#ifdef __ANDROID__
+void InputOnTouchEvent(int action, float x, float y);
+void InputPollAndroid(float deltaTime);
+#else
+struct GLFWwindow;
 void InputAttach(GLFWwindow *window);
 void InputPoll(GLFWwindow *window, float deltaTime);
 void InputOnMouseMove(double xpos, double ypos);
 void InputOnKeyDown(int keyCode);
+#endif
 
 const float4 &InputCameraPosition();
 float4 InputCameraForwardUnit();

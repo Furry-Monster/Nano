@@ -8,7 +8,13 @@
 #include "render/vulkan_rhi.h"
 #include "scene_node.h"
 
+#ifndef __ANDROID__
 #include <GLFW/glfw3.h>
+#endif
+
+#ifdef __ANDROID__
+#include <android/asset_manager.h>
+#endif
 
 #include <algorithm>
 #include <cmath>
@@ -96,6 +102,30 @@ static uint32_t LodValueFromCameraDistance() {
 }
 
 static unsigned char *LoadFileContent(const char *path, size_t &outSize) {
+#ifdef __ANDROID__
+  AAssetManager *mgr = GetAndroidAssetManager();
+  AAsset *asset = AAssetManager_open(mgr, path, AASSET_MODE_BUFFER);
+  if (!asset) {
+    spdlog::error("Failed to open asset: {}", path);
+    outSize = 0;
+    return nullptr;
+  }
+  outSize = static_cast<size_t>(AAsset_getLength(asset));
+  if (outSize == 0) {
+    AAsset_close(asset);
+    return nullptr;
+  }
+  auto *content = new unsigned char[outSize];
+  int read = AAsset_read(asset, content, outSize);
+  AAsset_close(asset);
+  if (read < 0 || static_cast<size_t>(read) != outSize) {
+    spdlog::error("Incomplete asset read: {} ({}/{})", path, read, outSize);
+    delete[] content;
+    outSize = 0;
+    return nullptr;
+  }
+  return content;
+#else
   FILE *file = std::fopen(path, "rb");
   if (!file) {
     spdlog::error("Failed to open file: {}", path);
@@ -142,6 +172,7 @@ static unsigned char *LoadFileContent(const char *path, size_t &outSize) {
   }
 
   return content;
+#endif
 }
 
 void InitScene(int canvasWidth, int canvasHeight, const std::string &bvhPath,
@@ -451,11 +482,15 @@ void InitScene(int canvasWidth, int canvasHeight, const std::string &bvhPath,
 }
 
 void OnKeyDown(int keyCode) {
+#ifndef __ANDROID__
   if (keyCode == GLFW_KEY_M) {
     sAutoDistanceLod = !sAutoDistanceLod;
     spdlog::info("LOD: {}", sAutoDistanceLod ? "auto (distance to reference)"
                                              : "manual (Up / Down arrows)");
   }
+#else
+  (void)keyCode;
+#endif
 }
 
 void RenderOneFrame([[maybe_unused]] float frameTime) {
@@ -570,6 +605,7 @@ void RenderOneFrame([[maybe_unused]] float frameTime) {
 }
 
 void OnKeyUp(int keyCode) {
+#ifndef __ANDROID__
   if (!sAutoDistanceLod) {
     if (keyCode == GLFW_KEY_UP) {
       sCurrentMipLevelIndex = (sCurrentMipLevelIndex + 1) % kMipLevelCount;
@@ -582,4 +618,7 @@ void OnKeyUp(int keyCode) {
     spdlog::info("Manual LOD mip value: {}",
                  kAvailableMipLevels[sCurrentMipLevelIndex]);
   }
+#else
+  (void)keyCode;
+#endif
 }

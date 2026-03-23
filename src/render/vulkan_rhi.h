@@ -4,7 +4,12 @@
 #include <vector>
 #include <vulkan/vulkan.h>
 
+#ifdef __ANDROID__
+struct ANativeWindow;
+#include <android/asset_manager.h>
+#else
 struct GLFWwindow;
+#endif
 
 struct GlobalConstants {
   union {
@@ -52,7 +57,13 @@ struct ShaderParameterDescription {
   VkPipelineLayout mPipelineLayout = VK_NULL_HANDLE;
 };
 
+#ifdef __ANDROID__
+bool InitVulkan(ANativeWindow *window, int canvasWidth, int canvasHeight);
+void SetAndroidAssetManager(AAssetManager *mgr);
+AAssetManager *GetAndroidAssetManager();
+#else
 bool InitVulkan(GLFWwindow *window, int canvasWidth, int canvasHeight);
+#endif
 
 VkCommandBuffer CreateCommandBuffer(
     VkCommandBufferLevel level = VK_COMMAND_BUFFER_LEVEL_PRIMARY);

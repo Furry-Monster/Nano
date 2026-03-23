@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <cstring>
+#include <utility>
 
 void matrix3::LoadIdentity() {
   std::memset(v, 0, sizeof(v));

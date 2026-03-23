@@ -9,6 +9,7 @@ android {
             minorApiLevel = 1
         }
     }
+    ndkVersion = "30.0.14904198"
 
     defaultConfig {
         applicationId = "com.example.nano_android"
@@ -21,7 +22,11 @@ android {
         externalNativeBuild {
             cmake {
                 cppFlags += "-std=c++17"
+                arguments += "-DANDROID_STL=c++_shared"
             }
+        }
+        ndk {
+            abiFilters += listOf("arm64-v8a")
         }
     }
 
@@ -47,6 +52,24 @@ android {
     buildFeatures {
         viewBinding = true
     }
+}
+
+// Copy compiled SPIR-V shaders and resource files into APK assets.
+// Prerequisites: run shaders/compile.sh to generate .sb files,
+// and place mesh data under res/ before building.
+tasks.register<Copy>("copyNanoAssets") {
+    from("${rootProject.projectDir}/../shaders") {
+        include("*.sb")
+        into("shaders")
+    }
+    from("${rootProject.projectDir}/../res") {
+        into("res")
+    }
+    into("${projectDir}/src/main/assets")
+}
+
+tasks.named("preBuild") {
+    dependsOn("copyNanoAssets")
 }
 
 dependencies {
