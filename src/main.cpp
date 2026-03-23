@@ -6,6 +6,7 @@
 #include <GLFW/glfw3.h>
 #include <chrono>
 #include <iostream>
+#include <sstream>
 #include <spdlog/spdlog.h>
 #include <string>
 
@@ -96,6 +97,7 @@ int main(int argc, char **argv) {
   InputAttach(window);
 
   auto lastTime = std::chrono::high_resolution_clock::now();
+  auto lastTitleUpdate = lastTime;
 
   while (!glfwWindowShouldClose(window)) {
     glfwPollEvents();
@@ -107,6 +109,20 @@ int main(int argc, char **argv) {
 
     InputPoll(window, deltaTime);
     RenderOneFrame(deltaTime);
+
+    auto elapsed =
+        std::chrono::duration<float>(currentTime - lastTitleUpdate).count();
+    if (elapsed >= 0.25f) {
+      lastTitleUpdate = currentTime;
+      SceneStats stats = SceneGetStats();
+      std::ostringstream oss;
+      oss << "Nano | FPS: " << static_cast<int>(stats.fps + 0.5f)
+          << " | LOD: " << (stats.autoLod ? "auto" : "manual") << " ("
+          << stats.lodMipValue << ") | Cam: " << static_cast<int>(stats.camX)
+          << "," << static_cast<int>(stats.camY) << ","
+          << static_cast<int>(stats.camZ);
+      glfwSetWindowTitle(window, oss.str().c_str());
+    }
   }
 
   vkDeviceWaitIdle(GetVulkanDevice());

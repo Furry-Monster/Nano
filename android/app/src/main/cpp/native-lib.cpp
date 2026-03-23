@@ -14,6 +14,8 @@
 #include "scene/scene.h"
 #include "input/input.h"
 
+#include <sstream>
+
 static ANativeWindow *sNativeWindow = nullptr;
 static std::atomic<bool> sRunning{false};
 static std::atomic<bool> sInitialized{false};
@@ -134,6 +136,34 @@ Java_com_example_nano_1android_NanoRenderer_nativeDestroy(JNIEnv *, jobject) {
         sRenderThread.join();
     }
     spdlog::info("Native destroy complete");
+}
+
+JNIEXPORT void JNICALL
+Java_com_example_nano_1android_NanoRenderer_nativeToggleAutoLOD(JNIEnv *, jobject) {
+    if (sInitialized.load()) SceneToggleAutoLOD();
+}
+
+JNIEXPORT void JNICALL
+Java_com_example_nano_1android_NanoRenderer_nativeLODUp(JNIEnv *, jobject) {
+    if (sInitialized.load()) SceneLODUp();
+}
+
+JNIEXPORT void JNICALL
+Java_com_example_nano_1android_NanoRenderer_nativeLODDown(JNIEnv *, jobject) {
+    if (sInitialized.load()) SceneLODDown();
+}
+
+JNIEXPORT jstring JNICALL
+Java_com_example_nano_1android_NanoRenderer_nativeGetStats(JNIEnv *env, jobject) {
+    if (!sInitialized.load()) {
+        return env->NewStringUTF("Initializing...");
+    }
+    SceneStats stats = SceneGetStats();
+    std::ostringstream oss;
+    oss << "FPS: " << static_cast<int>(stats.fps + 0.5f)
+        << "\nLOD: " << (stats.autoLod ? "auto" : "manual") << " (" << stats.lodMipValue << ")"
+        << "\nCam: " << static_cast<int>(stats.camX) << "," << static_cast<int>(stats.camY) << "," << static_cast<int>(stats.camZ);
+    return env->NewStringUTF(oss.str().c_str());
 }
 
 }

@@ -15,6 +15,11 @@ object NanoRenderer {
     external fun nativeOnTouch(action: Int, pointerCount: Int, x: Float, y: Float)
     external fun nativeDestroy()
 
+    external fun nativeToggleAutoLOD()
+    external fun nativeLODUp()
+    external fun nativeLODDown()
+    external fun nativeGetStats(): String
+
     fun handleTouchEvent(event: MotionEvent): Boolean {
         val action = when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> 0
