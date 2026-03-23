@@ -1,24 +1,63 @@
+#include "input/input.h"
 #include "render/vulkan_rhi.h"
 #include "scene/scene.h"
 
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 #include <chrono>
+#include <iostream>
 #include <spdlog/spdlog.h>
+#include <string>
 
 static constexpr int kWindowWidth = 1280;
 static constexpr int kWindowHeight = 720;
+static const char *kDefaultBvh = "res/Mitsuba/mitsuba.bvh";
+static const char *kDefaultMesh = "res/Mitsuba/mitsuba.nanomesh";
+
+static void PrintUsage(const char *exe) {
+  std::cout << "Usage: " << exe << " [options]\n"
+            << "  --bvh <path>   BVH file (default: " << kDefaultBvh << ")\n"
+            << "  --mesh <path>  NanoMesh file (default: " << kDefaultMesh
+            << ")\n"
+            << "  -h, --help     Show this help\n";
+}
+
+static bool ParseArgs(int argc, char **argv, std::string &bvhPath,
+                      std::string &meshPath) {
+  bvhPath = kDefaultBvh;
+  meshPath = kDefaultMesh;
+
+  for (int i = 1; i < argc; ++i) {
+    std::string arg = argv[i];
+    if (arg == "-h" || arg == "--help") {
+      PrintUsage(argv[0]);
+      return false;
+    }
+    if ((arg == "--bvh" || arg == "--mesh") && i + 1 < argc) {
+      if (arg == "--bvh")
+        bvhPath = argv[++i];
+      else
+        meshPath = argv[++i];
+    }
+  }
+  return true;
+}
 
 static void KeyCallback([[maybe_unused]] GLFWwindow *window, int key,
                         [[maybe_unused]] int scancode, int action,
                         [[maybe_unused]] int mods) {
-  if (action == GLFW_RELEASE) {
+  if (action == GLFW_PRESS)
+    OnKeyDown(key);
+  else if (action == GLFW_RELEASE)
     OnKeyUp(key);
-  }
 }
 
-int main() {
+int main(int argc, char **argv) {
   spdlog::set_level(spdlog::level::info);
+
+  std::string bvhPath, meshPath;
+  if (!ParseArgs(argc, argv, bvhPath, meshPath))
+    return 0;
 
   if (!glfwInit()) {
     spdlog::error("Failed to initialize GLFW");
@@ -45,7 +84,16 @@ int main() {
     return -1;
   }
 
-  InitScene(kWindowWidth, kWindowHeight);
+  try {
+    InitScene(kWindowWidth, kWindowHeight, bvhPath, meshPath);
+  } catch (const std::exception &e) {
+    spdlog::error("{}", e.what());
+    glfwDestroyWindow(window);
+    glfwTerminate();
+    return -1;
+  }
+
+  InputAttach(window);
 
   auto lastTime = std::chrono::high_resolution_clock::now();
 
@@ -57,11 +105,13 @@ int main() {
         std::chrono::duration<float>(currentTime - lastTime).count();
     lastTime = currentTime;
 
+    InputPoll(window, deltaTime);
     RenderOneFrame(deltaTime);
   }
 
   vkDeviceWaitIdle(GetVulkanDevice());
   glfwDestroyWindow(window);
   glfwTerminate();
+
   return 0;
 }

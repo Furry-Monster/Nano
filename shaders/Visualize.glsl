@@ -37,7 +37,7 @@ void main() {
     vec3 color = vec3(0.0, 0.0, 0.0);
     int pixelIndex = texcoord.y * 1280 + texcoord.x;
 
-    // Decode VisBuffer64: upper 32 = depth, lower 32 = (pageIndex<<8 | clusterIndex+1)
+    // Decode VisBuffer64: upper 32 = depth,lower 32 = (pageIndex << 8|clusterIndex +1)
     uint64_t pixelValue = VisBuffer64.mData[pixelIndex];
     uint packedClusterInfo = uint(pixelValue);
 

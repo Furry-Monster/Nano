@@ -4,15 +4,17 @@
 #include <string>
 #include <vector>
 
+/// Exporter CLI options. indexCount = trianglesPerCluster*3, must match
+/// Init.glsl vertexCount. maxClustersPerMip fits into BVH NumChildren (9 bits).
 struct ExporterOptions {
   std::string inputPath;
   std::string outBvhPath;
   std::string outNaniteMeshPath;
 
   std::vector<int> mipValues;
-  uint32_t trianglesPerCluster = 128; // indexCount = trianglesPerCluster*3
-  uint32_t indexCount = 384;          // must match Init.glsl vertexCount
-  uint32_t maxClustersPerMip = 511;   // fits into NumChildren (9 bits)
+  uint32_t trianglesPerCluster = 128;
+  uint32_t indexCount = 384;
+  uint32_t maxClustersPerMip = 511;
   float targetExtent = 500.0f;
 };
 

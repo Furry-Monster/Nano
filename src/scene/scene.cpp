@@ -1,5 +1,6 @@
 #include "scene.h"
 
+#include "input/input.h"
 #include "math/matrix4.h"
 #include "math/quaternion.h"
 #include "render/render_pass.h"
@@ -13,6 +14,7 @@
 #include <cmath>
 #include <cstdio>
 #include <spdlog/spdlog.h>
+#include <stdexcept>
 #include <vector>
 
 static constexpr int kBufferSize4MB = 4194304;
@@ -30,8 +32,6 @@ static uint32_t CountHzbMipLevels(int width, int height) {
 }
 
 static float sLODScale, sLODScaleHW;
-static float4 sCameraPosition(-330.0f, 330.0f, -330.0f);
-static float4 sCameraTarget(0.0f, 80.0f, 0.0f);
 static matrix4 sProjectionMatrix, sViewMatrix, sModelMatrix;
 static GlobalConstants sGlobalConstantsData;
 static VulkanBuffer *sGlobalConstantsBuffer;
@@ -66,6 +66,34 @@ static int sCurrentMipLevelIndex = 0;
 static constexpr int kAvailableMipLevels[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 10};
 static constexpr int kMipLevelCount =
     sizeof(kAvailableMipLevels) / sizeof(kAvailableMipLevels[0]);
+
+static bool sAutoDistanceLod = true;
+static const float4 kSceneLodReference(0.f, 80.f, 0.f, 1.f);
+
+static void SyncSceneCameraFromInput() {
+  const float4 worldUp(0.f, 1.f, 0.f, 0.f);
+  const float4 pos = InputCameraPosition(); // NOLINT
+  const float4 viewDir = InputCameraForwardUnit();
+  const float4 focus = pos + viewDir * 200.f;
+  sViewMatrix.LookAt(pos, focus, worldUp);
+  sGlobalConstantsData.SetViewMatrix(sViewMatrix.v);
+  sGlobalConstantsData.SetCameraPositionWS(pos.x, pos.y, pos.z, sLODScale);
+  sGlobalConstantsData.SetCameraViewDirectionWS(viewDir.x, viewDir.y, viewDir.z,
+                                                sLODScaleHW);
+}
+
+static uint32_t LodValueFromCameraDistance() {
+  float4 delta = InputCameraPosition() - kSceneLodReference;
+  const float dist = std::sqrt(std::max(0.f, dot3(delta, delta)));
+  constexpr float kNear = 90.f;
+  constexpr float kFar = 1100.f;
+  float t = (dist - kNear) / (kFar - kNear);
+  t = std::clamp(t, 0.f, 1.f);
+  const float fidx = t * static_cast<float>(kMipLevelCount - 1);
+  int idx = static_cast<int>(fidx + 0.5f);
+  idx = std::clamp(idx, 0, kMipLevelCount - 1);
+  return static_cast<uint32_t>(kAvailableMipLevels[idx]);
+}
 
 static unsigned char *LoadFileContent(const char *path, size_t &outSize) {
   FILE *file = std::fopen(path, "rb");
@@ -116,12 +144,13 @@ static unsigned char *LoadFileContent(const char *path, size_t &outSize) {
   return content;
 }
 
-void InitScene(int canvasWidth, int canvasHeight) {
+void InitScene(int canvasWidth, int canvasHeight, const std::string &bvhPath,
+               const std::string &meshPath) {
   StaticMesh::InitVertexLayout();
 
   sProjectionMatrix.Perspective(
       90.0f, static_cast<float>(canvasWidth) / canvasHeight, 10.0f, 10000.0f);
-  sViewMatrix.LookAt(sCameraPosition, sCameraTarget, float4(0.0f, 1.0f, 0.0f));
+  InputInitFromLookAt(-330.0f, 330.0f, -330.0f, 0.0f, 80.0f, 0.0f);
 
   matrix3 scaleMatrix;
   scaleMatrix.LoadIdentity();
@@ -136,20 +165,13 @@ void InitScene(int canvasWidth, int canvasHeight) {
   sLODScaleHW = viewToPixels / 32.0f;
 
   sGlobalConstantsData.SetProjectionMatrix(sProjectionMatrix.v);
-  sGlobalConstantsData.SetViewMatrix(sViewMatrix.v);
+  SyncSceneCameraFromInput();
   sGlobalConstantsData.SetModelMatrix(sModelMatrix.v);
   sCanvasW = canvasWidth;
   sCanvasH = canvasHeight;
-  sGlobalConstantsData.SetMisc0(
-      kAvailableMipLevels[sCurrentMipLevelIndex], 0u,
-      static_cast<unsigned>(canvasWidth), static_cast<unsigned>(canvasHeight));
-
-  float4 viewDir = sCameraTarget - sCameraPosition;
-  viewDir.Normalize();
-  sGlobalConstantsData.SetCameraPositionWS(sCameraPosition.x, sCameraPosition.y,
-                                           sCameraPosition.z, sLODScale);
-  sGlobalConstantsData.SetCameraViewDirectionWS(viewDir.x, viewDir.y, viewDir.z,
-                                                sLODScaleHW);
+  sGlobalConstantsData.SetMisc0(LodValueFromCameraDistance(), 0u,
+                                static_cast<unsigned>(canvasWidth),
+                                static_cast<unsigned>(canvasHeight));
 
   sGlobalConstantsBuffer =
       GenBufferObject(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
@@ -213,7 +235,9 @@ void InitScene(int canvasWidth, int canvasHeight) {
     size_t fileSize = 0;
     unsigned char *data = nullptr;
 
-    data = LoadFileContent("res/mitsuba.bvh", fileSize);
+    data = LoadFileContent(bvhPath.c_str(), fileSize);
+    if (!data || fileSize == 0)
+      throw std::runtime_error("Failed to load BVH: " + bvhPath);
     sBVHBuffer = GenBufferObject(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
                                  VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, data,
                                  static_cast<int>(fileSize));
@@ -221,12 +245,14 @@ void InitScene(int canvasWidth, int canvasHeight) {
     SetObjectName(VK_OBJECT_TYPE_BUFFER, sBVHBuffer->mBuffer,
                   "HierarchyBuffer");
 
-    data = LoadFileContent("res/mitsuba.nanitemesh", fileSize);
+    data = LoadFileContent(meshPath.c_str(), fileSize);
+    if (!data || fileSize == 0)
+      throw std::runtime_error("Failed to load NanoMesh: " + meshPath);
     sNaniteMesh = GenBufferObject(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
                                   VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, data,
                                   static_cast<int>(fileSize));
     delete[] data;
-    SetObjectName(VK_OBJECT_TYPE_BUFFER, sNaniteMesh->mBuffer, "NaniteMesh");
+    SetObjectName(VK_OBJECT_TYPE_BUFFER, sNaniteMesh->mBuffer, "NanoMesh");
   }
 
   sHzbFromPreviousFrameReady = false;
@@ -234,10 +260,10 @@ void InitScene(int canvasWidth, int canvasHeight) {
   sHZBTexture = new Texture2D;
   sHZBTexture->mFormat = VK_FORMAT_R32_SFLOAT;
   sHZBTexture->mImageAspectFlag = VK_IMAGE_ASPECT_COLOR_BIT;
-  GenImageWithMipLevels(
-      sHZBTexture, canvasWidth, canvasHeight, sHZBMipLevelCount,
-      VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-      VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+  GenImageWithMipLevels(sHZBTexture, canvasWidth, canvasHeight,
+                        sHZBMipLevelCount,
+                        VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+                        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
   sHZBTexture->mWidth = canvasWidth;
   sHZBTexture->mHeight = canvasHeight;
   sHZBTexture->mChannelCount = 1;
@@ -245,16 +271,17 @@ void InitScene(int canvasWidth, int canvasHeight) {
 
   sHZBStorageMipViews.resize(sHZBMipLevelCount);
   for (uint32_t m = 0; m < sHZBMipLevelCount; m++) {
-    sHZBStorageMipViews[m] = GenImageView2DMipRange(
-        sHZBTexture->mImage, VK_FORMAT_R32_SFLOAT, VK_IMAGE_ASPECT_COLOR_BIT, m,
-        1);
+    sHZBStorageMipViews[m] =
+        GenImageView2DMipRange(sHZBTexture->mImage, VK_FORMAT_R32_SFLOAT,
+                               VK_IMAGE_ASPECT_COLOR_BIT, m, 1);
   }
-  sHZBFullSampleView = GenImageView2DMipRange(
-      sHZBTexture->mImage, VK_FORMAT_R32_SFLOAT, VK_IMAGE_ASPECT_COLOR_BIT, 0,
-      sHZBMipLevelCount);
-  sHZBPointSampler = GenSampler(
-      VK_FILTER_NEAREST, VK_FILTER_NEAREST, VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
-      VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE, VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE);
+  sHZBFullSampleView =
+      GenImageView2DMipRange(sHZBTexture->mImage, VK_FORMAT_R32_SFLOAT,
+                             VK_IMAGE_ASPECT_COLOR_BIT, 0, sHZBMipLevelCount);
+  sHZBPointSampler = GenSampler(VK_FILTER_NEAREST, VK_FILTER_NEAREST,
+                                VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+                                VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+                                VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE);
 
   {
     VkCommandBuffer clearCb = CreateCommandBuffer();
@@ -266,11 +293,11 @@ void InitScene(int canvasWidth, int canvasHeight) {
       hzRange.levelCount = sHZBMipLevelCount;
       hzRange.baseArrayLayer = 0;
       hzRange.layerCount = 1;
-      TransferImageLayout(
-          clearCb, sHZBTexture->mImage, hzRange, VK_IMAGE_LAYOUT_UNDEFINED,
-          VK_ACCESS_NONE, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-          VK_IMAGE_LAYOUT_GENERAL, VK_ACCESS_TRANSFER_WRITE_BIT,
-          VK_PIPELINE_STAGE_TRANSFER_BIT);
+      TransferImageLayout(clearCb, sHZBTexture->mImage, hzRange,
+                          VK_IMAGE_LAYOUT_UNDEFINED, VK_ACCESS_NONE,
+                          VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                          VK_IMAGE_LAYOUT_GENERAL, VK_ACCESS_TRANSFER_WRITE_BIT,
+                          VK_PIPELINE_STAGE_TRANSFER_BIT);
       VkClearColorValue ccv{};
       ccv.float32[0] = 1.0f;
       vkCmdClearColorImage(clearCb, sHZBTexture->mImage,
@@ -278,8 +305,7 @@ void InitScene(int canvasWidth, int canvasHeight) {
       TransferImageLayout(
           clearCb, sHZBTexture->mImage, hzRange, VK_IMAGE_LAYOUT_GENERAL,
           VK_ACCESS_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
-          VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-          VK_ACCESS_SHADER_READ_BIT,
+          VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_ACCESS_SHADER_READ_BIT,
           VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT |
               VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
       vkEndCommandBuffer(clearCb);
@@ -320,8 +346,8 @@ void InitScene(int canvasWidth, int canvasHeight) {
     sNodeAndClusterCullPasses[i]->SetUniformBufferObject(
         5, sGlobalConstantsBuffer);
     sNodeAndClusterCullPasses[i]->SetSSBO(6, sNaniteMesh);
-    sNodeAndClusterCullPasses[i]->SetCombinedImageSampler(
-        7, sHZBFullSampleView, sHZBPointSampler);
+    sNodeAndClusterCullPasses[i]->SetCombinedImageSampler(7, sHZBFullSampleView,
+                                                          sHZBPointSampler);
     sNodeAndClusterCullPasses[i]->SetCS("shaders/NodeAndClusterCull.sb");
     sNodeAndClusterCullPasses[i]->SetComputeDispatchArgs(1, 1, 1);
     sNodeAndClusterCullPasses[i]->Build();
@@ -366,8 +392,8 @@ void InitScene(int canvasWidth, int canvasHeight) {
   {
     sBuildHZBMip0Pass = new RenderPass(RenderPassType::Compute, "BuildHZBMip0");
     sBuildHZBMip0Pass->SetSSBO(0, sVisBuffer64);
-    sBuildHZBMip0Pass->SetComputeStorageImageView(
-        1, sHZBStorageMipViews[0], false);
+    sBuildHZBMip0Pass->SetComputeStorageImageView(1, sHZBStorageMipViews[0],
+                                                  false);
     sBuildHZBMip0Pass->SetUniformBufferObject(2, sGlobalConstantsBuffer);
     sBuildHZBMip0Pass->SetCS("shaders/BuildHZBMip0.sb");
     sBuildHZBMip0Pass->SetComputeDispatchArgs(
@@ -420,11 +446,25 @@ void InitScene(int canvasWidth, int canvasHeight) {
   spdlog::info("Scene initialized");
 }
 
+void OnKeyDown(int keyCode) {
+  if (keyCode == GLFW_KEY_M) {
+    sAutoDistanceLod = !sAutoDistanceLod;
+    spdlog::info("LOD: {}", sAutoDistanceLod ? "auto (distance to reference)"
+                                             : "manual (Up / Down arrows)");
+  }
+}
+
 void RenderOneFrame([[maybe_unused]] float frameTime) {
-  sGlobalConstantsData.SetMisc0(
-      kAvailableMipLevels[sCurrentMipLevelIndex],
-      sHzbFromPreviousFrameReady ? 1u : 0u,
-      static_cast<unsigned>(sCanvasW), static_cast<unsigned>(sCanvasH));
+  SyncSceneCameraFromInput();
+  const uint32_t lodMipValue =
+      sAutoDistanceLod
+          ? LodValueFromCameraDistance()
+          : static_cast<uint32_t>(kAvailableMipLevels[sCurrentMipLevelIndex]);
+  const uint32_t hzbEnable =
+      (sHzbFromPreviousFrameReady && !InputCameraMovedThisFrame()) ? 1u : 0u;
+  sGlobalConstantsData.SetMisc0(lodMipValue, hzbEnable,
+                                static_cast<unsigned>(sCanvasW),
+                                static_cast<unsigned>(sCanvasH));
   BufferSubData(sGlobalConstantsBuffer, &sGlobalConstantsData,
                 sizeof(GlobalConstants));
 
@@ -491,8 +531,8 @@ void RenderOneFrame([[maybe_unused]] float frameTime) {
     hzBarrier.subresourceRange = hzRangeAll;
 
     vkCmdPipelineBarrier(cb, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr,
-                         0, nullptr, 1, &hzBarrier);
+                         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr, 0,
+                         nullptr, 1, &hzBarrier);
 
     for (auto *dp : sBuildHZBDownsamplePasses) {
       dp->UpdateDescriptorSets();
@@ -521,18 +561,21 @@ void RenderOneFrame([[maybe_unused]] float frameTime) {
 
   vkEndCommandBuffer(cb);
   SubmitAndPresentSwapChainFrame(cb, imageIndex);
+
+  InputClearCameraMovedAfterFrame();
 }
 
 void OnKeyUp(int keyCode) {
-  if (keyCode == GLFW_KEY_UP) {
-    sCurrentMipLevelIndex = (sCurrentMipLevelIndex + 1) % kMipLevelCount;
-  } else if (keyCode == GLFW_KEY_DOWN) {
-    sCurrentMipLevelIndex =
-        (sCurrentMipLevelIndex - 1 + kMipLevelCount) % kMipLevelCount;
+  if (!sAutoDistanceLod) {
+    if (keyCode == GLFW_KEY_UP) {
+      sCurrentMipLevelIndex = (sCurrentMipLevelIndex + 1) % kMipLevelCount;
+    } else if (keyCode == GLFW_KEY_DOWN) {
+      sCurrentMipLevelIndex =
+          (sCurrentMipLevelIndex - 1 + kMipLevelCount) % kMipLevelCount;
+    } else {
+      return;
+    }
+    spdlog::info("Manual LOD mip value: {}",
+                 kAvailableMipLevels[sCurrentMipLevelIndex]);
   }
-  sGlobalConstantsData.SetMisc0(
-      kAvailableMipLevels[sCurrentMipLevelIndex],
-      sHzbFromPreviousFrameReady ? 1u : 0u,
-      static_cast<unsigned>(sCanvasW), static_cast<unsigned>(sCanvasH));
-  spdlog::info("LOD Mip Level: {}", kAvailableMipLevels[sCurrentMipLevelIndex]);
 }

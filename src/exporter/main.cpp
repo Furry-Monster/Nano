@@ -1,6 +1,7 @@
 #include "args.h"
-#include "assimp_loader.h"
-#include "nanite_encoder.h"
+#include "cluster_builder.h"
+#include "mesh_loader.h"
+#include "nanite_encode.h"
 
 #include <iostream>
 
@@ -8,23 +9,42 @@ int main(int argc, char **argv) {
   try {
     const ExporterOptions opt = ParseArgs(argc, argv);
 
-    const auto loaded = LoadMeshAssimp(opt.inputPath, opt.targetExtent);
+    std::cout << "=== NanoExporter ===\n";
+    std::cout << "Input: " << opt.inputPath << "\n";
 
-    const auto pages = BuildPages(loaded.positions, loaded.triangles,
-                                  opt.mipValues, opt.trianglesPerCluster,
-                                  opt.indexCount, opt.maxClustersPerMip);
+    const auto mesh = LoadMesh(opt.inputPath, opt.targetExtent);
 
-    EncodeNaniteMesh(pages, opt.indexCount, opt.outNaniteMeshPath);
-    EncodeBVH(pages, opt.mipValues, opt.outBvhPath);
+    const auto build = BuildClustersAndPages(
+        mesh, opt.mipValues, opt.trianglesPerCluster, opt.maxClustersPerMip);
 
-    std::cout << "Export done.\n"
-              << "  pages: " << pages.size() << "\n"
-              << "  triangles: " << loaded.triangles.size() << "\n"
-              << "  out bvh: " << opt.outBvhPath << "\n"
-              << "  out nanitemesh: " << opt.outNaniteMeshPath << "\n";
+    std::cout << "\nBuild summary: " << build.pages.size() << " pages\n";
+    uint32_t totalClusters = 0;
+    for (const auto &page : build.pages) {
+      uint32_t nc = static_cast<uint32_t>(page.clusters.size());
+      std::cout << "  mip " << page.mipLevel << ": " << nc << " clusters";
+      if (!page.clusters.empty()) {
+        std::cout << "  bounds [" << page.bounds.lo.x << "," << page.bounds.lo.y
+                  << "," << page.bounds.lo.z << "] - [" << page.bounds.hi.x
+                  << "," << page.bounds.hi.y << "," << page.bounds.hi.z << "]";
+      }
+      std::cout << "\n";
+      totalClusters += nc;
+    }
+    std::cout << "  Total clusters: " << totalClusters << "\n\n";
+
+    std::cout << "Encoding BVH...\n";
+    EncodeBVH(build, opt.outBvhPath);
+
+    std::cout << "Encoding NanoMesh...\n";
+    EncodeNaniteMesh(build, opt.indexCount, opt.outNaniteMeshPath);
+
+    std::cout << "\nExport complete.\n"
+              << "  BVH:        " << opt.outBvhPath << "\n"
+              << "  NanoMesh: " << opt.outNaniteMeshPath << "\n";
     return 0;
   } catch (const std::exception &e) {
-    std::cerr << "nanite_exporter error: " << e.what() << "\n";
-    return 1;
+    if (e.what()[0] != '\0')
+      std::cerr << "NanoExporter error: " << e.what() << "\n";
+    return (e.what()[0] == '\0') ? 0 : 1;
   }
 }

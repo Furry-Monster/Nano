@@ -12,7 +12,8 @@ void main() {
     ivec2 texcoord = ivec2(gl_FragCoord.xy);
     float z = gl_FragCoord.z;
 
-    // VisBuffer64 encoding: upper 32 bits = depth, lower 32 bits = cluster info
+    // VisBuffer64 encoding:
+    // upper 32 bits = depth, lower 32 bits = cluster info
     uint64_t pixelDepth = floatBitsToUint(z);
     uint64_t pixelValue = V_PackedData.x;
     uint64_t outputPixel = (pixelDepth << 32) | pixelValue;
