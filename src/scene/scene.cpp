@@ -353,14 +353,18 @@ void InitScene(int canvasWidth, int canvasHeight, const std::string &bvhPath,
     sNodeAndClusterCullPasses[i]->Build();
   }
 
-  // Cluster cull pass
+  // Cluster cull pass (parallel copy: 64 invocations per workgroup)
   {
+    constexpr int kMaxVisibleClusters = 932;
+    constexpr int kClusterCullGroupSize = 64;
     sClusterCullPass = new RenderPass(RenderPassType::Compute, "ClusterCull");
     sClusterCullPass->SetUniformBufferObject(0, sGlobalConstantsBuffer);
     sClusterCullPass->SetSSBO(1, sMainAndPostNodeAndClusterBatches);
     sClusterCullPass->SetSSBO(2, sVisibleClusterSHWH, true);
     sClusterCullPass->SetCS("shaders/ClusterCull.sb");
-    sClusterCullPass->SetComputeDispatchArgs(1, 1, 1);
+    sClusterCullPass->SetComputeDispatchArgs(
+        (kMaxVisibleClusters + kClusterCullGroupSize - 1) / kClusterCullGroupSize,
+        1, 1);
     sClusterCullPass->Build();
   }
 

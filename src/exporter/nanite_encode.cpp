@@ -4,8 +4,11 @@
 #include <cassert>
 #include <cmath>
 #include <cstring>
+#include <future>
 #include <iostream>
 #include <stdexcept>
+#include <thread>
+#include <vector>
 
 // BVH binary layout (must match NodeAndClusterCull.glsl)
 //   HIERARCHY_NODE_SLICE_SIZE = 13*4*4 = 208 bytes = 52 uint32s per node
@@ -141,6 +144,52 @@ void EncodeBVH(const BuildResult &build, const std::string &outPath) {
             << " bytes\n";
 }
 
+static std::vector<uint32_t> EncodeSinglePage(const ClusterPage &page,
+                                              uint32_t indexCountPerCluster) {
+  std::vector<uint32_t> pageData;
+  const uint32_t clusterCount =
+      static_cast<uint32_t>(page.clusters.size());
+  if (clusterCount == 0)
+    return pageData;
+
+  pageData.push_back(clusterCount);
+  pageData.resize(1 + clusterCount, 0);
+  uint32_t clusterRelOffset = 0;
+  const size_t clusterOffsetsStart = 1;
+
+  for (uint32_t ci = 0; ci < clusterCount; ++ci) {
+    const Cluster &cl = page.clusters[ci];
+    pageData[clusterOffsetsStart + ci] = clusterRelOffset;
+
+    const uint32_t numVerts = static_cast<uint32_t>(cl.positions.size());
+    const uint32_t numIdx = static_cast<uint32_t>(cl.indices.size());
+    const uint32_t indexDataOffsetBytes = (7u + numVerts * 3u) * 4u;
+
+    pageData.push_back(indexDataOffsetBytes);
+    pageData.push_back(numIdx);
+    pageData.push_back(FloatBitsToU32(cl.lodSphere.center.x));
+    pageData.push_back(FloatBitsToU32(cl.lodSphere.center.y));
+    pageData.push_back(FloatBitsToU32(cl.lodSphere.center.z));
+    pageData.push_back(FloatBitsToU32(cl.lodSphere.radius));
+    pageData.push_back(PackLodErrorEdgeLength(cl.lodError, cl.edgeLength));
+
+    for (const Vec3 &p : cl.positions) {
+      pageData.push_back(FloatBitsToU32(p.x));
+      pageData.push_back(FloatBitsToU32(p.y));
+      pageData.push_back(FloatBitsToU32(p.z));
+    }
+
+    const uint32_t copyCount = std::min(numIdx, indexCountPerCluster);
+    for (uint32_t k = 0; k < copyCount; ++k)
+      pageData.push_back(cl.indices[k]);
+    for (uint32_t k = copyCount; k < indexCountPerCluster; ++k)
+      pageData.push_back(0u);
+
+    clusterRelOffset += (7u + numVerts * 3u + indexCountPerCluster) * 4u;
+  }
+  return pageData;
+}
+
 // NanoMesh binary layout (must match HWRasterizeVS.glsl GetClusterInfo)
 // [0]                    pageCount
 // [1..pageCount]         pageByteOffsets (absolute from file start)
@@ -162,58 +211,42 @@ void EncodeNaniteMesh(const BuildResult &build, uint32_t indexCountPerCluster,
   std::vector<uint32_t> out;
   out.reserve(4u * 1024u * 1024u);
 
-  out.push_back(pageCount);
-  out.resize(1 + pageCount, 0); // placeholder offsets
+  const unsigned int numThreads =
+      std::min(static_cast<unsigned int>(pageCount),
+               static_cast<unsigned int>(std::thread::hardware_concurrency()));
 
-  // Running absolute byte offset (starts after header + page offset table).
+  std::vector<std::vector<uint32_t>> pageDataVec(pageCount);
+
+  if (numThreads <= 1 || pageCount <= 1) {
+    for (uint32_t pi = 0; pi < pageCount; ++pi)
+      pageDataVec[pi] =
+          EncodeSinglePage(build.pages[pi], indexCountPerCluster);
+  } else {
+    std::vector<std::future<std::vector<uint32_t>>> futures;
+    futures.reserve(pageCount);
+    for (uint32_t pi = 0; pi < pageCount; ++pi) {
+      futures.push_back(std::async(std::launch::async, EncodeSinglePage,
+                                   std::cref(build.pages[pi]),
+                                   indexCountPerCluster));
+    }
+    for (uint32_t pi = 0; pi < pageCount; ++pi)
+      pageDataVec[pi] = futures[pi].get();
+  }
+
+  // Build final buffer: header + page offsets + concatenated page data
+  out.push_back(pageCount);
+  out.resize(1 + pageCount, 0);
+
   uint32_t absOffset = (1 + pageCount) * 4u;
   for (uint32_t pi = 0; pi < pageCount; ++pi) {
-    const ClusterPage &page = build.pages[pi];
-    const uint32_t clusterCount = static_cast<uint32_t>(page.clusters.size());
-
     out[1 + pi] = absOffset;
-    if (clusterCount == 0)
-      continue;
-
-    out.push_back(clusterCount);
-
-    const size_t clusterOffsetsStart = out.size();
-    out.resize(out.size() + clusterCount, 0);
-    uint32_t clusterRelOffset = 0;
-
-    for (uint32_t ci = 0; ci < clusterCount; ++ci) {
-      const Cluster &cl = page.clusters[ci];
-      out[clusterOffsetsStart + ci] = clusterRelOffset;
-
-      const uint32_t numVerts = static_cast<uint32_t>(cl.positions.size());
-      const uint32_t numIdx = static_cast<uint32_t>(cl.indices.size());
-      const uint32_t indexDataOffsetBytes = (7u + numVerts * 3u) * 4u;
-
-      out.push_back(indexDataOffsetBytes);
-      out.push_back(numIdx);
-      out.push_back(FloatBitsToU32(cl.lodSphere.center.x));
-      out.push_back(FloatBitsToU32(cl.lodSphere.center.y));
-      out.push_back(FloatBitsToU32(cl.lodSphere.center.z));
-      out.push_back(FloatBitsToU32(cl.lodSphere.radius));
-      out.push_back(PackLodErrorEdgeLength(cl.lodError, cl.edgeLength));
-
-      for (const Vec3 &p : cl.positions) {
-        out.push_back(FloatBitsToU32(p.x));
-        out.push_back(FloatBitsToU32(p.y));
-        out.push_back(FloatBitsToU32(p.z));
-      }
-
-      const uint32_t copyCount = std::min(numIdx, indexCountPerCluster);
-      for (uint32_t k = 0; k < copyCount; ++k)
-        out.push_back(cl.indices[k]);
-      for (uint32_t k = copyCount; k < indexCountPerCluster; ++k)
-        out.push_back(0u);
-
-      clusterRelOffset += (7u + numVerts * 3u + indexCountPerCluster) * 4u;
+    const auto &pd = pageDataVec[pi];
+    if (!pd.empty()) {
+      const uint32_t pageBytes =
+          static_cast<uint32_t>(pd.size() * sizeof(uint32_t));
+      absOffset += pageBytes;
+      out.insert(out.end(), pd.begin(), pd.end());
     }
-
-    const uint32_t pageBytes = 4u + clusterCount * 4u + clusterRelOffset;
-    absOffset += pageBytes;
   }
 
   {
