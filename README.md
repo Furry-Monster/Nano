@@ -47,7 +47,7 @@ src/
   math/                 - Custom math library (float4, matrix4, quaternion)
   render/               - Vulkan RHI, render passes, materials, meshes
   scene/                - Scene management and node hierarchy
-  exporter/             - Nanite BVH & NaniteMesh exporter (still under development)
+  exporter/             - Nanite BVH & NaniteMesh exporter (FBX, GLTF/GLB)
 shaders/                - GLSL compute and graphics shaders
 res/                    - Runtime assets (BVH, Nanite mesh data)
 libs/                   - Third-party libraries (GLFW, GLM, ImGui, spdlog, stb)
@@ -65,7 +65,16 @@ libs/                   - Third-party libraries (GLFW, GLM, ImGui, spdlog, stb)
 
 `GlobalConstants.mMisc0`: **x** = LOD mip (auto distance or manual), **y** = HZB occlusion (0 first frame / camera moved / warmup, 1 when previous-frame HZB is valid), **z/w** = screen size for projection tests.
 
+## Exporter
+
+Export FBX or GLTF/GLB models to BVH and NaniteMesh for use with Nano:
+
+```bash
+./bin/NaniteExporter --input model.fbx --out-bvh res/model.bvh --out-nanitemesh res/model.nanitemesh
+```
+
+Optional: `--mip-values "0,1,2,3,4,5,6,7,8,10"`, `--triangles-per-cluster 128`, `--index-count 384`, `--target-extent 500`.
+
 ## TODO
 
 1. Using Multithreading for BVH traversal and other tasks.
-2. Finish the exporter module to support exporting BVH and NaniteMesh data.

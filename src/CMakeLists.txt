@@ -30,11 +30,13 @@ add_dependencies(Nano copy_resources)
 add_executable(NaniteExporter
     exporter/main.cpp
     exporter/args.cpp
-    exporter/assimp_loader.cpp
-    exporter/nanite_encoder.cpp
+    exporter/mesh_loader.cpp
+    exporter/cluster_builder.cpp
+    exporter/nanite_encode.cpp
 )
 
 target_include_directories(NaniteExporter PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/..
 )
 
