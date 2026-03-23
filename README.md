@@ -13,6 +13,9 @@ LOD 3:
 Complicate Model:
 ![demo_2](demo_2.png)
 
+Android Demo:
+![demo_3](demo_3.png)
+
 ## Build
 
 ```bash
@@ -82,7 +85,3 @@ Export FBX or GLTF/GLB models to BVH and NanoMesh for use with Nano:
 Output: `model.bvh`, `model.nanomesh` (same dir as input). Use `-o dir`, `--bvh path`, `--mesh path` for custom paths.
 
 Optional: `--mip-values "0,1,2,3,4,5,6,7,8,10"`, `--triangles-per-cluster 128`, `--index-count 384`, `--target-extent 500`.
-
-## TODO
-
-1. Using Multithreading for BVH traversal and other tasks.

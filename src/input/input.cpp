@@ -1,18 +1,24 @@
 #include "input/input.h"
 
+#ifndef __ANDROID__
 #include <GLFW/glfw3.h>
+#endif
 
 #include <algorithm>
 #include <cmath>
 
+#ifndef __ANDROID__
 static GLFWwindow *sWindow = nullptr;
+#endif
 static float4 sCameraPosition(-330.f, 330.f, -330.f);
 static float sYawRadians = 0.f;
 static float sPitchRadians = 0.f;
 static double sLastMouseX = 0.0;
 static double sLastMouseY = 0.0;
 static bool sFirstMouse = true;
+#ifndef __ANDROID__
 static bool sMouseLookEnabled = true;
+#endif
 static bool sCameraMovedThisFrame = false;
 static constexpr float kMoveSpeed = 220.f;
 static constexpr float kMouseSensitivity = 0.0022f;
@@ -34,6 +40,80 @@ void InputInitFromLookAt(float eyeX, float eyeY, float eyeZ, float targetX,
   sPitchRadians = std::asin(std::clamp(f.y, -1.f, 1.f));
   sFirstMouse = true;
 }
+
+#ifdef __ANDROID__
+
+static constexpr float kTouchSensitivity = 0.004f;
+static constexpr int kActionDown = 0;
+static constexpr int kActionUp = 1;
+static constexpr int kActionMove = 2;
+static constexpr int kActionPointerDown = 3;
+static constexpr int kActionPointerUp = 4;
+static bool sTouchActive = false;
+static int sTouchFingerCount = 0;
+
+void InputOnTouchEvent(int action, int pointerCount, float x, float y) {
+  if (action == kActionDown) {
+    sLastMouseX = x;
+    sLastMouseY = y;
+    sFirstMouse = false;
+    sTouchActive = true;
+    sTouchFingerCount = pointerCount;
+    return;
+  }
+  if (action == kActionPointerDown) {
+    sTouchFingerCount = pointerCount;
+    sLastMouseX = x;
+    sLastMouseY = y;
+    return;
+  }
+  if (action == kActionUp) {
+    sTouchActive = false;
+    sTouchFingerCount = 0;
+    return;
+  }
+  if (action == kActionPointerUp) {
+    sTouchFingerCount = pointerCount - 1;
+    sLastMouseX = x;
+    sLastMouseY = y;
+    return;
+  }
+  if (action == kActionMove && sTouchActive) {
+    sTouchFingerCount = pointerCount;
+    if (sFirstMouse) {
+      sLastMouseX = x;
+      sLastMouseY = y;
+      sFirstMouse = false;
+      return;
+    }
+    const double dx = x - sLastMouseX;
+    const double dy = y - sLastMouseY;
+    sLastMouseX = x;
+    sLastMouseY = y;
+    if (std::fabs(dx) + std::fabs(dy) < 0.5) {
+      return;
+    }
+    if (sTouchFingerCount == 1) {
+      sCameraMovedThisFrame = true;
+      sYawRadians -= static_cast<float>(dx) * kTouchSensitivity;
+      sPitchRadians -= static_cast<float>(dy) * kTouchSensitivity;
+      sPitchRadians = std::clamp(sPitchRadians, -1.45f, 1.45f);
+    }
+  }
+}
+
+void InputPollAndroid(float deltaTime) {
+  if (sTouchActive && sTouchFingerCount >= 2) {
+    float4 fwd = CameraForwardFromAngles();
+    const float step = kMoveSpeed * deltaTime;
+    sCameraPosition.x += fwd.x * step;
+    sCameraPosition.y += fwd.y * step;
+    sCameraPosition.z += fwd.z * step;
+    sCameraMovedThisFrame = true;
+  }
+}
+
+#else
 
 void InputOnMouseMove(double xpos, double ypos) {
   if (!sMouseLookEnabled || !sWindow) {
@@ -129,6 +209,8 @@ void InputOnKeyDown(int keyCode) {
     }
   }
 }
+
+#endif
 
 const float4 &InputCameraPosition() { return sCameraPosition; }
 

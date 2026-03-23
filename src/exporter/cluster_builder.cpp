@@ -4,9 +4,11 @@
 
 #include <algorithm>
 #include <cmath>
+#include <future>
 #include <iostream>
 #include <numeric>
 #include <stdexcept>
+#include <thread>
 #include <vector>
 
 namespace {
@@ -193,6 +195,47 @@ std::vector<Cluster> MakeClusters(const std::vector<Triangle> &tris,
   return clusters;
 }
 
+struct RawMip {
+  int mipLevel;
+  std::vector<Cluster> clusters;
+};
+
+static RawMip BuildSingleMipLevel(const LoadedMesh &mesh,
+                                  const std::vector<int> &mipValues,
+                                  size_t mipIndex, float meshDiagonal,
+                                  uint32_t trianglesPerCluster) {
+  const int mipLevel = mipValues[mipIndex];
+  const std::vector<Vec3> *posPtr = &mesh.positions;
+  const std::vector<Triangle> *triPtr = &mesh.triangles;
+  SimplifiedMesh simplified;
+
+  if (mipLevel > 0) {
+    float reductionFactor = std::pow(0.5f, static_cast<float>(mipLevel));
+    size_t targetTriCount =
+        std::max(size_t(1), static_cast<size_t>(mesh.triangles.size() *
+                                                reductionFactor));
+
+    simplified = SimplifyMesh(mesh.positions, mesh.triangles, targetTriCount);
+    posPtr = &simplified.positions;
+    triPtr = &simplified.triangles;
+  }
+
+  auto trisMip = *triPtr;
+  SortTrianglesSpatially(trisMip, *posPtr);
+
+  float lodError = meshDiagonal * (1 << mipLevel) * 0.001f;
+  auto clusters =
+      MakeClusters(trisMip, *posPtr, trianglesPerCluster, lodError);
+
+  RawMip raw;
+  raw.mipLevel = mipLevel;
+  raw.clusters = std::move(clusters);
+  if (mipLevel > 0) {
+    raw.clusters.shrink_to_fit(); // free temp memory before return
+  }
+  return raw;
+}
+
 } // namespace
 
 BuildResult BuildClustersAndPages(const LoadedMesh &mesh,
@@ -211,41 +254,44 @@ BuildResult BuildClustersAndPages(const LoadedMesh &mesh,
     return box.diagonal();
   }();
 
-  struct RawMip {
-    int mipLevel;
-    std::vector<Cluster> clusters;
-  };
   std::vector<RawMip> rawMips;
+  rawMips.resize(mipValues.size());
 
-  for (int mipLevel : mipValues) {
-    const std::vector<Vec3> *posPtr = &mesh.positions;
-    const std::vector<Triangle> *triPtr = &mesh.triangles;
-    SimplifiedMesh simplified;
+  const unsigned int numThreads =
+      std::min(static_cast<unsigned int>(mipValues.size()),
+               std::thread::hardware_concurrency());
 
-    if (mipLevel > 0) {
-      float reductionFactor = std::pow(0.5f, static_cast<float>(mipLevel));
-      size_t targetTriCount =
-          std::max(size_t(1), static_cast<size_t>(mesh.triangles.size() *
-                                                  reductionFactor));
-
-      simplified = SimplifyMesh(mesh.positions, mesh.triangles, targetTriCount);
-      posPtr = &simplified.positions;
-      triPtr = &simplified.triangles;
-
-      std::cout << "  mip " << mipLevel << ": simplified "
-                << mesh.triangles.size() << " -> "
-                << simplified.triangles.size() << " tris ("
-                << simplified.positions.size() << " verts)\n";
+  if (numThreads <= 1 || mipValues.size() <= 1) {
+    for (size_t i = 0; i < mipValues.size(); ++i) {
+      rawMips[i] = BuildSingleMipLevel(mesh, mipValues, i, meshDiagonal,
+                                       trianglesPerCluster);
+      if (mipValues[i] > 0) {
+        size_t triCount = 0;
+        for (const auto &cl : rawMips[i].clusters)
+          triCount += cl.indices.size() / 3;
+        std::cout << "  mip " << mipValues[i] << ": simplified "
+                  << mesh.triangles.size() << " -> " << triCount << " tris\n";
+      }
     }
-
-    auto trisMip = *triPtr;
-    SortTrianglesSpatially(trisMip, *posPtr);
-
-    float lodError = meshDiagonal * (1 << mipLevel) * 0.001f;
-    auto clusters =
-        MakeClusters(trisMip, *posPtr, trianglesPerCluster, lodError);
-
-    rawMips.push_back({mipLevel, std::move(clusters)});
+  } else {
+    std::vector<std::future<RawMip>> futures;
+    futures.reserve(mipValues.size());
+    for (size_t i = 0; i < mipValues.size(); ++i) {
+      futures.push_back(std::async(
+          std::launch::async, BuildSingleMipLevel,
+          std::cref(mesh), std::cref(mipValues), i, meshDiagonal,
+          trianglesPerCluster));
+    }
+    for (size_t i = 0; i < futures.size(); ++i) {
+      rawMips[i] = futures[i].get();
+      if (mipValues[i] > 0) {
+        size_t triCount = 0;
+        for (const auto &cl : rawMips[i].clusters)
+          triCount += cl.indices.size() / 3;
+        std::cout << "  mip " << mipValues[i] << ": simplified "
+                  << mesh.triangles.size() << " -> " << triCount << " tris\n";
+      }
+    }
   }
 
   BuildResult result;

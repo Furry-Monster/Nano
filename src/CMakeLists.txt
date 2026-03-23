@@ -41,3 +41,6 @@ target_include_directories(NanoExporter PRIVATE
 )
 
 target_link_libraries(NanoExporter PRIVATE assimp::assimp meshoptimizer)
+if(Threads_FOUND)
+  target_link_libraries(NanoExporter PRIVATE Threads::Threads)
+endif()

@@ -8,7 +8,13 @@
 #include "render/vulkan_rhi.h"
 #include "scene_node.h"
 
+#ifndef __ANDROID__
 #include <GLFW/glfw3.h>
+#endif
+
+#ifdef __ANDROID__
+#include <android/asset_manager.h>
+#endif
 
 #include <algorithm>
 #include <cmath>
@@ -37,7 +43,8 @@ static GlobalConstants sGlobalConstantsData;
 static VulkanBuffer *sGlobalConstantsBuffer;
 static VulkanBuffer *sBVHBuffer;
 static VulkanBuffer *sEchoBuffer;
-static VulkanBuffer *sVisBuffer64;
+static VulkanBuffer *sVisBufferDepth;
+static VulkanBuffer *sVisBufferID;
 static VulkanBuffer *sNaniteMesh;
 static VulkanBuffer *sVisibleClusterSHWH;
 static VulkanBuffer *sWorkArgsBuffer[2];
@@ -96,6 +103,30 @@ static uint32_t LodValueFromCameraDistance() {
 }
 
 static unsigned char *LoadFileContent(const char *path, size_t &outSize) {
+#ifdef __ANDROID__
+  AAssetManager *mgr = GetAndroidAssetManager();
+  AAsset *asset = AAssetManager_open(mgr, path, AASSET_MODE_BUFFER);
+  if (!asset) {
+    spdlog::error("Failed to open asset: {}", path);
+    outSize = 0;
+    return nullptr;
+  }
+  outSize = static_cast<size_t>(AAsset_getLength(asset));
+  if (outSize == 0) {
+    AAsset_close(asset);
+    return nullptr;
+  }
+  auto *content = new unsigned char[outSize];
+  int read = AAsset_read(asset, content, outSize);
+  AAsset_close(asset);
+  if (read < 0 || static_cast<size_t>(read) != outSize) {
+    spdlog::error("Incomplete asset read: {} ({}/{})", path, read, outSize);
+    delete[] content;
+    outSize = 0;
+    return nullptr;
+  }
+  return content;
+#else
   FILE *file = std::fopen(path, "rb");
   if (!file) {
     spdlog::error("Failed to open file: {}", path);
@@ -142,6 +173,7 @@ static unsigned char *LoadFileContent(const char *path, size_t &outSize) {
   }
 
   return content;
+#endif
 }
 
 void InitScene(int canvasWidth, int canvasHeight, const std::string &bvhPath,
@@ -201,10 +233,16 @@ void InitScene(int canvasWidth, int canvasHeight, const std::string &bvhPath,
                                 kBufferSize4MB);
   SetObjectName(VK_OBJECT_TYPE_BUFFER, sEchoBuffer->mBuffer, "EchoBuffer");
 
-  sVisBuffer64 = GenBufferObject(
+  sVisBufferDepth = GenBufferObject(
       VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
-      nullptr, canvasWidth * canvasHeight * static_cast<int>(sizeof(uint64_t)));
-  SetObjectName(VK_OBJECT_TYPE_BUFFER, sVisBuffer64->mBuffer, "VisBuffer64");
+      nullptr, canvasWidth * canvasHeight * static_cast<int>(sizeof(uint32_t)));
+  SetObjectName(VK_OBJECT_TYPE_BUFFER, sVisBufferDepth->mBuffer,
+                "VisBufferDepth");
+
+  sVisBufferID = GenBufferObject(
+      VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
+      nullptr, canvasWidth * canvasHeight * static_cast<int>(sizeof(uint32_t)));
+  SetObjectName(VK_OBJECT_TYPE_BUFFER, sVisBufferID->mBuffer, "VisBufferID");
 
   sWorkArgsBuffer[0] = GenBufferObject(
       VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT,
@@ -319,7 +357,9 @@ void InitScene(int canvasWidth, int canvasHeight, const std::string &bvhPath,
     sInitPass->SetSSBO(0, sWorkArgsBuffer[0], true);
     sInitPass->SetSSBO(1, sWorkArgsBuffer[1], true);
     sInitPass->SetSSBO(2, sMainAndPostNodeAndClusterBatches, true);
-    sInitPass->SetSSBO(3, sVisBuffer64, true);
+    sInitPass->SetSSBO(3, sVisBufferDepth, true);
+    sInitPass->SetSSBO(4, sVisBufferID, true);
+    sInitPass->SetUniformBufferObject(5, sGlobalConstantsBuffer);
     sInitPass->SetCS("shaders/Init.sb");
     sInitPass->SetComputeDispatchArgs(
         static_cast<int>(std::ceil(static_cast<float>(canvasWidth) / 8.0f)),
@@ -353,14 +393,18 @@ void InitScene(int canvasWidth, int canvasHeight, const std::string &bvhPath,
     sNodeAndClusterCullPasses[i]->Build();
   }
 
-  // Cluster cull pass
+  // Cluster cull pass (parallel copy: 64 invocations per workgroup)
   {
+    constexpr int kMaxVisibleClusters = 932;
+    constexpr int kClusterCullGroupSize = 64;
     sClusterCullPass = new RenderPass(RenderPassType::Compute, "ClusterCull");
     sClusterCullPass->SetUniformBufferObject(0, sGlobalConstantsBuffer);
     sClusterCullPass->SetSSBO(1, sMainAndPostNodeAndClusterBatches);
     sClusterCullPass->SetSSBO(2, sVisibleClusterSHWH, true);
     sClusterCullPass->SetCS("shaders/ClusterCull.sb");
-    sClusterCullPass->SetComputeDispatchArgs(1, 1, 1);
+    sClusterCullPass->SetComputeDispatchArgs(
+        (kMaxVisibleClusters + kClusterCullGroupSize - 1) / kClusterCullGroupSize,
+        1, 1);
     sClusterCullPass->Build();
   }
 
@@ -370,7 +414,8 @@ void InitScene(int canvasWidth, int canvasHeight, const std::string &bvhPath,
     sHWRasterizePass->SetUniformBufferObject(0, sGlobalConstantsBuffer);
     sHWRasterizePass->SetSSBO(1, sNaniteMesh);
     sHWRasterizePass->SetSSBO(2, sVisibleClusterSHWH);
-    sHWRasterizePass->SetSSBO(3, sVisBuffer64, true);
+    sHWRasterizePass->SetSSBO(3, sVisBufferDepth, true);
+    sHWRasterizePass->SetSSBO(4, sVisBufferID, true);
     sHWRasterizePass->SetVSPS("shaders/HWRasterizeVS.sb",
                               "shaders/HWRasterizeFS.sb");
     sHWRasterizePass->Build(canvasWidth, canvasHeight);
@@ -379,8 +424,9 @@ void InitScene(int canvasWidth, int canvasHeight, const std::string &bvhPath,
   // Visualize pass
   {
     sVisualizePass = new RenderPass(RenderPassType::Compute, "Visualize");
-    sVisualizePass->SetSSBO(0, sVisBuffer64);
+    sVisualizePass->SetSSBO(0, sVisBufferID);
     sVisualizePass->SetComputeImage(1, sVisualizationTexture, true);
+    sVisualizePass->SetUniformBufferObject(2, sGlobalConstantsBuffer);
     sVisualizePass->SetCS("shaders/Visualize.sb");
     sVisualizePass->SetComputeDispatchArgs(
         static_cast<int>(std::ceil(static_cast<float>(canvasWidth) / 8.0f)),
@@ -391,7 +437,7 @@ void InitScene(int canvasWidth, int canvasHeight, const std::string &bvhPath,
 
   {
     sBuildHZBMip0Pass = new RenderPass(RenderPassType::Compute, "BuildHZBMip0");
-    sBuildHZBMip0Pass->SetSSBO(0, sVisBuffer64);
+    sBuildHZBMip0Pass->SetSSBO(0, sVisBufferDepth);
     sBuildHZBMip0Pass->SetComputeStorageImageView(1, sHZBStorageMipViews[0],
                                                   false);
     sBuildHZBMip0Pass->SetUniformBufferObject(2, sGlobalConstantsBuffer);
@@ -447,11 +493,15 @@ void InitScene(int canvasWidth, int canvasHeight, const std::string &bvhPath,
 }
 
 void OnKeyDown(int keyCode) {
+#ifndef __ANDROID__
   if (keyCode == GLFW_KEY_M) {
     sAutoDistanceLod = !sAutoDistanceLod;
     spdlog::info("LOD: {}", sAutoDistanceLod ? "auto (distance to reference)"
                                              : "manual (Up / Down arrows)");
   }
+#else
+  (void)keyCode;
+#endif
 }
 
 void RenderOneFrame([[maybe_unused]] float frameTime) {
@@ -566,6 +616,7 @@ void RenderOneFrame([[maybe_unused]] float frameTime) {
 }
 
 void OnKeyUp(int keyCode) {
+#ifndef __ANDROID__
   if (!sAutoDistanceLod) {
     if (keyCode == GLFW_KEY_UP) {
       sCurrentMipLevelIndex = (sCurrentMipLevelIndex + 1) % kMipLevelCount;
@@ -578,4 +629,7 @@ void OnKeyUp(int keyCode) {
     spdlog::info("Manual LOD mip value: {}",
                  kAvailableMipLevels[sCurrentMipLevelIndex]);
   }
+#else
+  (void)keyCode;
+#endif
 }

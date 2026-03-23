@@ -132,8 +132,9 @@ void RenderPass::SetUniformBufferObject(int binding, VulkanBuffer *ubo) {
   layoutBinding.binding = binding;
   layoutBinding.descriptorCount = 1;
   layoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-  layoutBinding.stageFlags =
-      VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_COMPUTE_BIT;
+  layoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT |
+                             VK_SHADER_STAGE_COMPUTE_BIT |
+                             VK_SHADER_STAGE_FRAGMENT_BIT;
   mLayoutBindings.push_back(layoutBinding);
 
   VkDescriptorBufferInfo bufferInfo = {};
@@ -224,8 +225,13 @@ void RenderPass::Build(uint32_t canvasWidth, uint32_t canvasHeight) {
     cpInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
     cpInfo.stage = stage;
     cpInfo.layout = mPipelineLayout;
-    vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &cpInfo, nullptr,
-                             &mPSO);
+    VkResult result = vkCreateComputePipelines(device, VK_NULL_HANDLE, 1,
+                                                &cpInfo, nullptr, &mPSO);
+    if (result != VK_SUCCESS) {
+      spdlog::error("Failed to create compute pipeline '{}': {}", mName,
+                    static_cast<int>(result));
+      mPSO = VK_NULL_HANDLE;
+    }
   } else {
     mViewportWidth = canvasWidth;
     mViewportHeight = canvasHeight;

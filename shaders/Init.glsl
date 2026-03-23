@@ -1,5 +1,4 @@
 #version 450
-#extension GL_ARB_gpu_shader_int64 : enable
 
 layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 
@@ -15,13 +14,28 @@ layout(std430, binding = 2) buffer FMainAndPostNodeAndClusterBatches {
     uint mData[];
 } MainAndPostNodeAndClusterBatches;
 
-layout(std430, binding = 3) buffer FVisBuffer64 {
-    uint64_t mData[];
-} VisBuffer64;
+layout(std430, binding = 3) buffer FVisBufferDepth {
+    uint mData[];
+} VisBufferDepth;
+
+layout(std430, binding = 4) buffer FVisBufferID {
+    uint mData[];
+} VisBufferID;
+
+layout(binding = 5) uniform GlobalConstants {
+    mat4 mProjectionMatrix;
+    mat4 mViewMatrix;
+    mat4 mModelMatrix;
+    uvec4 mMisc0;
+    vec4 mNanite_ViewOrigin;
+    vec4 mNanite_ViewForward;
+} UBO;
 
 void main() {
+    uint screenW = UBO.mMisc0.z;
+    uint screenH = UBO.mMisc0.w;
     ivec2 texcoord = ivec2(gl_GlobalInvocationID.xy);
-    if (any(greaterThanEqual(texcoord, ivec2(1280, 720)))) {
+    if (texcoord.x >= int(screenW) || texcoord.y >= int(screenH)) {
         return;
     }
 
@@ -46,6 +60,7 @@ void main() {
         MainAndPostNodeAndClusterBatches.mData[0] = 0u;
     }
 
-    int pixelIndex = texcoord.y * 1280 + texcoord.x;
-    VisBuffer64.mData[pixelIndex] = 0xFFFFFFFF00000000ul;
+    int pixelIndex = texcoord.y * int(screenW) + texcoord.x;
+    VisBufferDepth.mData[pixelIndex] = 0xFFFFFFFFu;
+    VisBufferID.mData[pixelIndex] = 0u;
 }

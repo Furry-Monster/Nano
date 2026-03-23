@@ -1,5 +1,8 @@
 #version 450
-layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+// Parallel copy: one invocation per cluster pair (2 uints)
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+#define NANITE_MAX_VISIBLE_CLUSTERS 932
 
 layout(binding = 0) uniform GlobalConstants {
     mat4 mProjectionMatrix;
@@ -19,11 +22,11 @@ layout(std430, binding = 2) buffer FVisibleClusterSHWH {
 } VisibleClusterSHWH;
 
 void main() {
-    // Pass-through: copy visible clusters from batches to output buffer
-    for (int i = 0; i < 932; i++) {
-        VisibleClusterSHWH.mData[i * 2] =
-            MainAndPostNodeAndClusterBatches.mData[1024 + i * 2];
-        VisibleClusterSHWH.mData[i * 2 + 1] =
-            MainAndPostNodeAndClusterBatches.mData[1024 + i * 2 + 1];
-    }
+    uint i = gl_GlobalInvocationID.x;
+    if (i >= NANITE_MAX_VISIBLE_CLUSTERS)
+        return;
+    VisibleClusterSHWH.mData[i * 2] =
+        MainAndPostNodeAndClusterBatches.mData[1024 + i * 2];
+    VisibleClusterSHWH.mData[i * 2 + 1] =
+        MainAndPostNodeAndClusterBatches.mData[1024 + i * 2 + 1];
 }

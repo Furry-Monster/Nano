@@ -18,6 +18,8 @@ endif()
 
 add_compile_options(-Wall -Wextra)
 
+find_package(Threads QUIET)
+
 set(NANO_ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
 set(CMAKE_INSTALL_PREFIX "${NANO_ROOT_DIR}/bin")
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${NANO_ROOT_DIR}/bin")

@@ -1,11 +1,10 @@
 #version 450
-#extension GL_ARB_gpu_shader_int64 : enable
 
 layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 
-layout(std430, binding = 0) readonly buffer FVisBuffer64 {
-    uint64_t mData[];
-} VisBuffer64;
+layout(std430, binding = 0) readonly buffer FVisBufferDepth {
+    uint mData[];
+} VisBufferDepth;
 
 layout(binding = 1, r32f) uniform writeonly image2D HZBMip0;
 
@@ -30,13 +29,12 @@ void main() {
     }
 
     int idx = p.y * int(dim.x) + p.x;
-    uint64_t v = VisBuffer64.mData[idx];
-    uint hi = uint(v >> 32u);
+    uint depthBits = VisBufferDepth.mData[idx];
     float z;
-    if (hi == 0xFFFFFFFFu) {
+    if (depthBits == 0xFFFFFFFFu) {
         z = 1.0;
     } else {
-        z = uintBitsToFloat(hi);
+        z = uintBitsToFloat(depthBits);
     }
     imageStore(HZBMip0, p, vec4(z, 0.0, 0.0, 0.0));
 }

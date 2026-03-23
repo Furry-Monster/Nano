@@ -5,8 +5,14 @@
 #include <cstring>
 #include <vulkan/vulkan_core.h>
 
+#ifdef __ANDROID__
+#include <android/log.h>
+#include <android/native_window.h>
+#include <vulkan/vulkan_android.h>
+#else
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
+#endif
 #include <spdlog/spdlog.h>
 
 static VkInstance sInstance = VK_NULL_HANDLE;
@@ -33,8 +39,16 @@ static VkSemaphore sReadyToPresent = VK_NULL_HANDLE;
 static VkFence sInFlightFence = VK_NULL_HANDLE;
 static uint32_t sCanvasWidth = 1280;
 static uint32_t sCanvasHeight = 720;
+static VkFormat sSwapChainFormat = VK_FORMAT_B8G8R8A8_UNORM;
 
 static ShaderParameterDescription sUberShaderParams;
+
+#ifdef __ANDROID__
+static AAssetManager *sAssetManager = nullptr;
+
+void SetAndroidAssetManager(AAssetManager *mgr) { sAssetManager = mgr; }
+AAssetManager *GetAndroidAssetManager() { return sAssetManager; }
+#endif
 
 static VkPhysicalDeviceMemoryProperties sPhysicalMemProps = {};
 static bool sPhysicalMemPropsCached = false;
@@ -82,6 +96,18 @@ static std::vector<const char *> GetValidationLayers() {
   return layers;
 }
 
+static bool IsInstanceExtensionAvailable(const char *name) {
+  uint32_t count = 0;
+  vkEnumerateInstanceExtensionProperties(nullptr, &count, nullptr);
+  std::vector<VkExtensionProperties> props(count);
+  vkEnumerateInstanceExtensionProperties(nullptr, &count, props.data());
+  for (const auto &p : props) {
+    if (std::strcmp(p.extensionName, name) == 0)
+      return true;
+  }
+  return false;
+}
+
 static bool InitInstance() {
   VkApplicationInfo appInfo = {};
   appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
@@ -91,12 +117,23 @@ static bool InitInstance() {
   appInfo.engineVersion = VK_MAKE_VERSION(0, 2, 0);
   appInfo.apiVersion = VK_API_VERSION_1_2;
 
+#ifdef __ANDROID__
+  std::vector<const char *> extensions = {
+      VK_KHR_SURFACE_EXTENSION_NAME,
+      VK_KHR_ANDROID_SURFACE_EXTENSION_NAME,
+  };
+#else
   uint32_t glfwExtCount = 0;
   const char **glfwExts = glfwGetRequiredInstanceExtensions(&glfwExtCount);
-
   std::vector<const char *> extensions(glfwExts, glfwExts + glfwExtCount);
-  extensions.push_back(VK_EXT_DEBUG_REPORT_EXTENSION_NAME);
-  extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+#endif
+
+#ifndef NDEBUG
+  if (IsInstanceExtensionAvailable(VK_EXT_DEBUG_REPORT_EXTENSION_NAME))
+    extensions.push_back(VK_EXT_DEBUG_REPORT_EXTENSION_NAME);
+  if (IsInstanceExtensionAvailable(VK_EXT_DEBUG_UTILS_EXTENSION_NAME))
+    extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+#endif
 
   auto validationLayers = GetValidationLayers();
 
@@ -141,10 +178,20 @@ static bool InitDebugger() {
          VK_SUCCESS;
 }
 
+#ifdef __ANDROID__
+static bool InitSurface(ANativeWindow *window) {
+  VkAndroidSurfaceCreateInfoKHR createInfo = {};
+  createInfo.sType = VK_STRUCTURE_TYPE_ANDROID_SURFACE_CREATE_INFO_KHR;
+  createInfo.window = window;
+  return vkCreateAndroidSurfaceKHR(sInstance, &createInfo, nullptr, &sSurface) ==
+         VK_SUCCESS;
+}
+#else
 static bool InitSurface(GLFWwindow *window) {
   return glfwCreateWindowSurface(sInstance, window, nullptr, &sSurface) ==
          VK_SUCCESS;
 }
+#endif
 
 static bool TryPickQueueFamilies(VkPhysicalDevice device,
                                  uint32_t *outGraphicIdx,
@@ -248,17 +295,20 @@ static bool InitLogicDevice() {
 
   const char *deviceExtensions[] = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
 
-  VkPhysicalDeviceShaderAtomicInt64Features atomic64 = {};
-  atomic64.sType =
-      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_INT64_FEATURES;
-  atomic64.shaderBufferInt64Atomics = VK_TRUE;
+  VkPhysicalDeviceFeatures2 supportedFeatures2 = {};
+  supportedFeatures2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+  vkGetPhysicalDeviceFeatures2(sGPU, &supportedFeatures2);
+
+  spdlog::info("Device features: fragmentStoresAndAtomics={}",
+               supportedFeatures2.features.fragmentStoresAndAtomics);
 
   VkPhysicalDeviceFeatures2 features2 = {};
   features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
-  features2.features.shaderInt64 = VK_TRUE;
-  features2.features.fragmentStoresAndAtomics = VK_TRUE;
+  features2.features.fragmentStoresAndAtomics =
+      supportedFeatures2.features.fragmentStoresAndAtomics;
+#ifndef __ANDROID__
   features2.features.fillModeNonSolid = VK_TRUE;
-  features2.pNext = &atomic64;
+#endif
 
   VkDeviceCreateInfo deviceInfo = {};
   deviceInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
@@ -307,23 +357,34 @@ static bool InitSwapchain() {
 
   VkSurfaceFormatKHR selectedFormat = sSurfaceFormats[0];
   for (auto &fmt : sSurfaceFormats) {
-    if (fmt.format == VK_FORMAT_B8G8R8A8_UNORM &&
+    if ((fmt.format == VK_FORMAT_B8G8R8A8_UNORM ||
+         fmt.format == VK_FORMAT_R8G8B8A8_UNORM) &&
         fmt.colorSpace == VK_COLORSPACE_SRGB_NONLINEAR_KHR) {
       selectedFormat = fmt;
       break;
     }
   }
+  sSwapChainFormat = selectedFormat.format;
 
   VkSwapchainCreateInfoKHR info = {};
   info.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
   info.surface = sSurface;
-  info.minImageCount = 2;
+  info.minImageCount = std::max(2u, sSurfaceCaps.minImageCount);
   info.imageFormat = selectedFormat.format;
   info.imageColorSpace = selectedFormat.colorSpace;
   info.imageExtent = {sCanvasWidth, sCanvasHeight};
   info.imageArrayLayers = 1;
   info.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+#ifdef __ANDROID__
+  info.compositeAlpha = VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR;
+  if (sSurfaceCaps.supportedTransforms & VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR)
+    info.preTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
+  else
+    info.preTransform = sSurfaceCaps.currentTransform;
+#else
   info.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+  info.preTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
+#endif
   VkPresentModeKHR presentMode = VK_PRESENT_MODE_FIFO_KHR;
   for (VkPresentModeKHR mode : sPresentModes) {
     if (mode == VK_PRESENT_MODE_MAILBOX_KHR) {
@@ -332,7 +393,6 @@ static bool InitSwapchain() {
     }
   }
   info.presentMode = presentMode;
-  info.preTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
 
   uint32_t queueFamilyIndices[] = {sGraphicQueueFamily, sPresentQueueFamily};
   if (sGraphicQueueFamily != sPresentQueueFamily) {
@@ -363,7 +423,7 @@ static void InitSwapChainRenderTargets() {
   sSwapChainImageViews.resize(imageCount);
   for (uint32_t i = 0; i < imageCount; i++) {
     sSwapChainImageViews[i] =
-        GenImageView2D(sSwapChainImages[i], VK_FORMAT_B8G8R8A8_UNORM,
+        GenImageView2D(sSwapChainImages[i], sSwapChainFormat,
                        VK_IMAGE_ASPECT_COLOR_BIT);
   }
 
@@ -382,7 +442,7 @@ static void InitSwapChainRenderTargets() {
 
 static void InitSwapChainRenderPass() {
   VkAttachmentDescription attachments[2] = {};
-  attachments[0].format = VK_FORMAT_B8G8R8A8_UNORM;
+  attachments[0].format = sSwapChainFormat;
   attachments[0].samples = VK_SAMPLE_COUNT_1_BIT;
   attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
   attachments[0].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
@@ -444,6 +504,7 @@ static void InitCommandPool() {
   VkCommandPoolCreateInfo poolInfo = {};
   poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
   poolInfo.queueFamilyIndex = sGraphicQueueFamily;
+  poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
 
   vkCreateCommandPool(sDevice, &poolInfo, nullptr, &sCommandPool);
 }
@@ -505,7 +566,11 @@ static void InitUberPassPipelineLayout() {
                          &sUberShaderParams.mPipelineLayout);
 }
 
+#ifdef __ANDROID__
+bool InitVulkan(ANativeWindow *window, int canvasWidth, int canvasHeight) {
+#else
 bool InitVulkan(GLFWwindow *window, int canvasWidth, int canvasHeight) {
+#endif
   sCanvasWidth = static_cast<uint32_t>(canvasWidth);
   sCanvasHeight = static_cast<uint32_t>(canvasHeight);
 
@@ -537,6 +602,9 @@ bool InitVulkan(GLFWwindow *window, int canvasWidth, int canvasHeight) {
     return false;
 
   InitSurfaceProperties();
+  spdlog::info("Surface extent: {}x{}, canvas: {}x{}",
+               sSurfaceCaps.currentExtent.width,
+               sSurfaceCaps.currentExtent.height, sCanvasWidth, sCanvasHeight);
   if (!InitSwapchain()) {
     spdlog::error("Swapchain initialization failed");
     return false;
@@ -633,10 +701,18 @@ void BeginCommandBuffer(VkCommandBuffer cb,
 }
 
 bool PrepareSwapChainFrame(uint32_t *outImageIndex) {
-  vkWaitForFences(sDevice, 1, &sInFlightFence, VK_TRUE, UINT64_MAX);
+  VkResult waitResult =
+      vkWaitForFences(sDevice, 1, &sInFlightFence, VK_TRUE, 1000000000ULL);
+  if (waitResult == VK_TIMEOUT) {
+    spdlog::warn("vkWaitForFences timed out, resetting fence");
+    vkResetFences(sDevice, 1, &sInFlightFence);
+  } else if (waitResult != VK_SUCCESS) {
+    spdlog::error("vkWaitForFences failed: {}", static_cast<int>(waitResult));
+    return false;
+  }
 
   VkResult acquire =
-      vkAcquireNextImageKHR(sDevice, sSwapChain, UINT64_MAX, sReadyToRender,
+      vkAcquireNextImageKHR(sDevice, sSwapChain, 1000000000ULL, sReadyToRender,
                             VK_NULL_HANDLE, outImageIndex);
   if (acquire != VK_SUCCESS && acquire != VK_SUBOPTIMAL_KHR) {
     spdlog::warn("vkAcquireNextImageKHR failed: {}", static_cast<int>(acquire));
@@ -681,7 +757,13 @@ void SubmitAndPresentSwapChainFrame(VkCommandBuffer cb, uint32_t imageIndex) {
   submitInfo.pWaitDstStageMask = &waitStage;
   submitInfo.signalSemaphoreCount = 1;
   submitInfo.pSignalSemaphores = &sReadyToPresent;
-  vkQueueSubmit(sGraphicQueue, 1, &submitInfo, sInFlightFence);
+  VkResult submitResult =
+      vkQueueSubmit(sGraphicQueue, 1, &submitInfo, sInFlightFence);
+  if (submitResult != VK_SUCCESS) {
+    spdlog::error("vkQueueSubmit failed: {}", static_cast<int>(submitResult));
+    vkFreeCommandBuffers(sDevice, sCommandPool, 1, &cb);
+    return;
+  }
 
   VkPresentInfoKHR presentInfo = {};
   presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
@@ -690,7 +772,11 @@ void SubmitAndPresentSwapChainFrame(VkCommandBuffer cb, uint32_t imageIndex) {
   presentInfo.swapchainCount = 1;
   presentInfo.pSwapchains = &sSwapChain;
   presentInfo.pImageIndices = &imageIndex;
-  vkQueuePresentKHR(sPresentQueue, &presentInfo);
+  VkResult presentResult = vkQueuePresentKHR(sPresentQueue, &presentInfo);
+  if (presentResult != VK_SUCCESS && presentResult != VK_SUBOPTIMAL_KHR) {
+    spdlog::error("vkQueuePresentKHR failed: {}",
+                  static_cast<int>(presentResult));
+  }
 
   vkFreeCommandBuffers(sDevice, sCommandPool, 1, &cb);
 }
@@ -1011,6 +1097,28 @@ CreatePSO(VkRenderPass renderPass, VkPrimitiveTopology topology,
 }
 
 VkShaderModule LoadShaderModule(const char *filePath) {
+  std::vector<unsigned char> content;
+  size_t fileSize = 0;
+
+#ifdef __ANDROID__
+  AAsset *asset =
+      AAssetManager_open(sAssetManager, filePath, AASSET_MODE_BUFFER);
+  if (!asset) {
+    spdlog::error("Failed to open shader asset: {}", filePath);
+    return VK_NULL_HANDLE;
+  }
+  fileSize = static_cast<size_t>(AAsset_getLength(asset));
+  content.resize(fileSize);
+  if (fileSize > 0) {
+    int read = AAsset_read(asset, content.data(), fileSize);
+    if (read < 0 || static_cast<size_t>(read) != fileSize) {
+      spdlog::error("Incomplete shader asset read: {}", filePath);
+      AAsset_close(asset);
+      return VK_NULL_HANDLE;
+    }
+  }
+  AAsset_close(asset);
+#else
   FILE *file = std::fopen(filePath, "rb");
   if (!file) {
     spdlog::error("Failed to open shader: {}", filePath);
@@ -1030,14 +1138,14 @@ VkShaderModule LoadShaderModule(const char *filePath) {
     return VK_NULL_HANDLE;
   }
 
-  const size_t fileSize = static_cast<size_t>(fileSizeLong);
+  fileSize = static_cast<size_t>(fileSizeLong);
   if (std::fseek(file, 0, SEEK_SET) != 0) {
     spdlog::error("Failed to rewind shader: {}", filePath);
     std::fclose(file);
     return VK_NULL_HANDLE;
   }
 
-  std::vector<unsigned char> content(fileSize);
+  content.resize(fileSize);
   if (fileSize > 0) {
     const size_t read = std::fread(content.data(), 1, fileSize, file);
     if (read != fileSize) {
@@ -1048,6 +1156,7 @@ VkShaderModule LoadShaderModule(const char *filePath) {
     }
   }
   std::fclose(file);
+#endif
 
   VkShaderModuleCreateInfo moduleInfo = {};
   moduleInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
