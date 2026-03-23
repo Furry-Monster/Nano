@@ -1,11 +1,10 @@
 #version 450
-#extension GL_ARB_gpu_shader_int64 : enable
 
 layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 
-layout(std430, binding = 0) buffer FVisBuffer64 {
-    uint64_t mData[];
-} VisBuffer64;
+layout(std430, binding = 0) buffer FVisBufferID {
+    uint mData[];
+} VisBufferID;
 
 layout(binding = 1, rgba32f) uniform image2D VisualizeTexture;
 
@@ -37,9 +36,7 @@ void main() {
     vec3 color = vec3(0.0, 0.0, 0.0);
     int pixelIndex = texcoord.y * 1280 + texcoord.x;
 
-    // Decode VisBuffer64: upper 32 = depth,lower 32 = (pageIndex << 8|clusterIndex +1)
-    uint64_t pixelValue = VisBuffer64.mData[pixelIndex];
-    uint packedClusterInfo = uint(pixelValue);
+    uint packedClusterInfo = VisBufferID.mData[pixelIndex];
 
     if (packedClusterInfo > 0) {
         uint pageIndex = packedClusterInfo >> 8;

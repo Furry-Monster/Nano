@@ -224,8 +224,13 @@ void RenderPass::Build(uint32_t canvasWidth, uint32_t canvasHeight) {
     cpInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
     cpInfo.stage = stage;
     cpInfo.layout = mPipelineLayout;
-    vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &cpInfo, nullptr,
-                             &mPSO);
+    VkResult result = vkCreateComputePipelines(device, VK_NULL_HANDLE, 1,
+                                                &cpInfo, nullptr, &mPSO);
+    if (result != VK_SUCCESS) {
+      spdlog::error("Failed to create compute pipeline '{}': {}", mName,
+                    static_cast<int>(result));
+      mPSO = VK_NULL_HANDLE;
+    }
   } else {
     mViewportWidth = canvasWidth;
     mViewportHeight = canvasHeight;

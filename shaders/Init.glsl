@@ -1,5 +1,4 @@
 #version 450
-#extension GL_ARB_gpu_shader_int64 : enable
 
 layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 
@@ -15,9 +14,13 @@ layout(std430, binding = 2) buffer FMainAndPostNodeAndClusterBatches {
     uint mData[];
 } MainAndPostNodeAndClusterBatches;
 
-layout(std430, binding = 3) buffer FVisBuffer64 {
-    uint64_t mData[];
-} VisBuffer64;
+layout(std430, binding = 3) buffer FVisBufferDepth {
+    uint mData[];
+} VisBufferDepth;
+
+layout(std430, binding = 4) buffer FVisBufferID {
+    uint mData[];
+} VisBufferID;
 
 void main() {
     ivec2 texcoord = ivec2(gl_GlobalInvocationID.xy);
@@ -47,5 +50,6 @@ void main() {
     }
 
     int pixelIndex = texcoord.y * 1280 + texcoord.x;
-    VisBuffer64.mData[pixelIndex] = 0xFFFFFFFF00000000ul;
+    VisBufferDepth.mData[pixelIndex] = 0xFFFFFFFFu;
+    VisBufferID.mData[pixelIndex] = 0u;
 }

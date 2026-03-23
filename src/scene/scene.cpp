@@ -43,7 +43,8 @@ static GlobalConstants sGlobalConstantsData;
 static VulkanBuffer *sGlobalConstantsBuffer;
 static VulkanBuffer *sBVHBuffer;
 static VulkanBuffer *sEchoBuffer;
-static VulkanBuffer *sVisBuffer64;
+static VulkanBuffer *sVisBufferDepth;
+static VulkanBuffer *sVisBufferID;
 static VulkanBuffer *sNaniteMesh;
 static VulkanBuffer *sVisibleClusterSHWH;
 static VulkanBuffer *sWorkArgsBuffer[2];
@@ -232,10 +233,16 @@ void InitScene(int canvasWidth, int canvasHeight, const std::string &bvhPath,
                                 kBufferSize4MB);
   SetObjectName(VK_OBJECT_TYPE_BUFFER, sEchoBuffer->mBuffer, "EchoBuffer");
 
-  sVisBuffer64 = GenBufferObject(
+  sVisBufferDepth = GenBufferObject(
       VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
-      nullptr, canvasWidth * canvasHeight * static_cast<int>(sizeof(uint64_t)));
-  SetObjectName(VK_OBJECT_TYPE_BUFFER, sVisBuffer64->mBuffer, "VisBuffer64");
+      nullptr, canvasWidth * canvasHeight * static_cast<int>(sizeof(uint32_t)));
+  SetObjectName(VK_OBJECT_TYPE_BUFFER, sVisBufferDepth->mBuffer,
+                "VisBufferDepth");
+
+  sVisBufferID = GenBufferObject(
+      VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
+      nullptr, canvasWidth * canvasHeight * static_cast<int>(sizeof(uint32_t)));
+  SetObjectName(VK_OBJECT_TYPE_BUFFER, sVisBufferID->mBuffer, "VisBufferID");
 
   sWorkArgsBuffer[0] = GenBufferObject(
       VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT,
@@ -350,7 +357,8 @@ void InitScene(int canvasWidth, int canvasHeight, const std::string &bvhPath,
     sInitPass->SetSSBO(0, sWorkArgsBuffer[0], true);
     sInitPass->SetSSBO(1, sWorkArgsBuffer[1], true);
     sInitPass->SetSSBO(2, sMainAndPostNodeAndClusterBatches, true);
-    sInitPass->SetSSBO(3, sVisBuffer64, true);
+    sInitPass->SetSSBO(3, sVisBufferDepth, true);
+    sInitPass->SetSSBO(4, sVisBufferID, true);
     sInitPass->SetCS("shaders/Init.sb");
     sInitPass->SetComputeDispatchArgs(
         static_cast<int>(std::ceil(static_cast<float>(canvasWidth) / 8.0f)),
@@ -405,7 +413,8 @@ void InitScene(int canvasWidth, int canvasHeight, const std::string &bvhPath,
     sHWRasterizePass->SetUniformBufferObject(0, sGlobalConstantsBuffer);
     sHWRasterizePass->SetSSBO(1, sNaniteMesh);
     sHWRasterizePass->SetSSBO(2, sVisibleClusterSHWH);
-    sHWRasterizePass->SetSSBO(3, sVisBuffer64, true);
+    sHWRasterizePass->SetSSBO(3, sVisBufferDepth, true);
+    sHWRasterizePass->SetSSBO(4, sVisBufferID, true);
     sHWRasterizePass->SetVSPS("shaders/HWRasterizeVS.sb",
                               "shaders/HWRasterizeFS.sb");
     sHWRasterizePass->Build(canvasWidth, canvasHeight);
@@ -414,7 +423,7 @@ void InitScene(int canvasWidth, int canvasHeight, const std::string &bvhPath,
   // Visualize pass
   {
     sVisualizePass = new RenderPass(RenderPassType::Compute, "Visualize");
-    sVisualizePass->SetSSBO(0, sVisBuffer64);
+    sVisualizePass->SetSSBO(0, sVisBufferID);
     sVisualizePass->SetComputeImage(1, sVisualizationTexture, true);
     sVisualizePass->SetCS("shaders/Visualize.sb");
     sVisualizePass->SetComputeDispatchArgs(
@@ -426,7 +435,7 @@ void InitScene(int canvasWidth, int canvasHeight, const std::string &bvhPath,
 
   {
     sBuildHZBMip0Pass = new RenderPass(RenderPassType::Compute, "BuildHZBMip0");
-    sBuildHZBMip0Pass->SetSSBO(0, sVisBuffer64);
+    sBuildHZBMip0Pass->SetSSBO(0, sVisBufferDepth);
     sBuildHZBMip0Pass->SetComputeStorageImageView(1, sHZBStorageMipViews[0],
                                                   false);
     sBuildHZBMip0Pass->SetUniformBufferObject(2, sGlobalConstantsBuffer);

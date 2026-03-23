@@ -295,35 +295,20 @@ static bool InitLogicDevice() {
 
   const char *deviceExtensions[] = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
 
-  VkPhysicalDeviceShaderAtomicInt64Features supportedAtomic64 = {};
-  supportedAtomic64.sType =
-      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_INT64_FEATURES;
   VkPhysicalDeviceFeatures2 supportedFeatures2 = {};
   supportedFeatures2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
-  supportedFeatures2.pNext = &supportedAtomic64;
   vkGetPhysicalDeviceFeatures2(sGPU, &supportedFeatures2);
 
-  spdlog::info("Device features: shaderInt64={}, fragmentStoresAndAtomics={}, "
-               "shaderBufferInt64Atomics={}",
-               supportedFeatures2.features.shaderInt64,
-               supportedFeatures2.features.fragmentStoresAndAtomics,
-               supportedAtomic64.shaderBufferInt64Atomics);
-
-  VkPhysicalDeviceShaderAtomicInt64Features atomic64 = {};
-  atomic64.sType =
-      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_INT64_FEATURES;
-  atomic64.shaderBufferInt64Atomics =
-      supportedAtomic64.shaderBufferInt64Atomics;
+  spdlog::info("Device features: fragmentStoresAndAtomics={}",
+               supportedFeatures2.features.fragmentStoresAndAtomics);
 
   VkPhysicalDeviceFeatures2 features2 = {};
   features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
-  features2.features.shaderInt64 = supportedFeatures2.features.shaderInt64;
   features2.features.fragmentStoresAndAtomics =
       supportedFeatures2.features.fragmentStoresAndAtomics;
 #ifndef __ANDROID__
   features2.features.fillModeNonSolid = VK_TRUE;
 #endif
-  features2.pNext = &atomic64;
 
   VkDeviceCreateInfo deviceInfo = {};
   deviceInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
@@ -516,6 +501,7 @@ static void InitCommandPool() {
   VkCommandPoolCreateInfo poolInfo = {};
   poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
   poolInfo.queueFamilyIndex = sGraphicQueueFamily;
+  poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
 
   vkCreateCommandPool(sDevice, &poolInfo, nullptr, &sCommandPool);
 }
@@ -613,6 +599,13 @@ bool InitVulkan(GLFWwindow *window, int canvasWidth, int canvasHeight) {
     return false;
 
   InitSurfaceProperties();
+#ifdef __ANDROID__
+  if (sSurfaceCaps.currentExtent.width != 0xFFFFFFFF) {
+    sCanvasWidth = sSurfaceCaps.currentExtent.width;
+    sCanvasHeight = sSurfaceCaps.currentExtent.height;
+    spdlog::info("Using surface extent: {}x{}", sCanvasWidth, sCanvasHeight);
+  }
+#endif
   if (!InitSwapchain()) {
     spdlog::error("Swapchain initialization failed");
     return false;
@@ -709,10 +702,18 @@ void BeginCommandBuffer(VkCommandBuffer cb,
 }
 
 bool PrepareSwapChainFrame(uint32_t *outImageIndex) {
-  vkWaitForFences(sDevice, 1, &sInFlightFence, VK_TRUE, UINT64_MAX);
+  VkResult waitResult =
+      vkWaitForFences(sDevice, 1, &sInFlightFence, VK_TRUE, 1000000000ULL);
+  if (waitResult == VK_TIMEOUT) {
+    spdlog::warn("vkWaitForFences timed out, resetting fence");
+    vkResetFences(sDevice, 1, &sInFlightFence);
+  } else if (waitResult != VK_SUCCESS) {
+    spdlog::error("vkWaitForFences failed: {}", static_cast<int>(waitResult));
+    return false;
+  }
 
   VkResult acquire =
-      vkAcquireNextImageKHR(sDevice, sSwapChain, UINT64_MAX, sReadyToRender,
+      vkAcquireNextImageKHR(sDevice, sSwapChain, 1000000000ULL, sReadyToRender,
                             VK_NULL_HANDLE, outImageIndex);
   if (acquire != VK_SUCCESS && acquire != VK_SUBOPTIMAL_KHR) {
     spdlog::warn("vkAcquireNextImageKHR failed: {}", static_cast<int>(acquire));
@@ -757,7 +758,13 @@ void SubmitAndPresentSwapChainFrame(VkCommandBuffer cb, uint32_t imageIndex) {
   submitInfo.pWaitDstStageMask = &waitStage;
   submitInfo.signalSemaphoreCount = 1;
   submitInfo.pSignalSemaphores = &sReadyToPresent;
-  vkQueueSubmit(sGraphicQueue, 1, &submitInfo, sInFlightFence);
+  VkResult submitResult =
+      vkQueueSubmit(sGraphicQueue, 1, &submitInfo, sInFlightFence);
+  if (submitResult != VK_SUCCESS) {
+    spdlog::error("vkQueueSubmit failed: {}", static_cast<int>(submitResult));
+    vkFreeCommandBuffers(sDevice, sCommandPool, 1, &cb);
+    return;
+  }
 
   VkPresentInfoKHR presentInfo = {};
   presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
@@ -766,7 +773,11 @@ void SubmitAndPresentSwapChainFrame(VkCommandBuffer cb, uint32_t imageIndex) {
   presentInfo.swapchainCount = 1;
   presentInfo.pSwapchains = &sSwapChain;
   presentInfo.pImageIndices = &imageIndex;
-  vkQueuePresentKHR(sPresentQueue, &presentInfo);
+  VkResult presentResult = vkQueuePresentKHR(sPresentQueue, &presentInfo);
+  if (presentResult != VK_SUCCESS && presentResult != VK_SUBOPTIMAL_KHR) {
+    spdlog::error("vkQueuePresentKHR failed: {}",
+                  static_cast<int>(presentResult));
+  }
 
   vkFreeCommandBuffers(sDevice, sCommandPool, 1, &cb);
 }
