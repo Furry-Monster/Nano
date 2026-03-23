@@ -11,8 +11,8 @@
 
 static constexpr int kWindowWidth = 1280;
 static constexpr int kWindowHeight = 720;
-static const char *kDefaultBvh = "res/Cian_Dressup.bvh";
-static const char *kDefaultMesh = "res/Cian_Dressup.nanomesh";
+static const char *kDefaultBvh = "res/Mitsuba/mitsuba.bvh";
+static const char *kDefaultMesh = "res/Mitsuba/mitsuba.nanomesh";
 
 static void PrintUsage(const char *exe) {
   std::cout << "Usage: " << exe << " [options]\n"
