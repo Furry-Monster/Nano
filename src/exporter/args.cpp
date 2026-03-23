@@ -37,7 +37,7 @@ void Usage(const char *exe) {
       << "  -i, --input <path>       Input model (fbx/gltf/glb)\n"
       << "  -o, --output-dir <path>  Output directory (default: input dir)\n"
       << "  --bvh <path>             BVH output (overrides -o)\n"
-      << "  --mesh <path>            NaniteMesh output (overrides -o)\n"
+      << "  --mesh <path>            NanoMesh output (overrides -o)\n"
       << "  --mip-values \"0,1,2,...\" LOD mip levels (default: "
          "0,1,2,3,4,5,6,7,8,10)\n"
       << "  --target-extent <float>  Bounding extent (default: 500)\n";
@@ -99,7 +99,7 @@ ExporterOptions ParseArgs(int argc, char **argv) { // NOLINT
   if (opt.outBvhPath.empty())
     opt.outBvhPath = outputDir + inBase + ".bvh";
   if (opt.outNaniteMeshPath.empty())
-    opt.outNaniteMeshPath = outputDir + inBase + ".nanitemesh";
+    opt.outNaniteMeshPath = outputDir + inBase + ".nanomesh";
 
   if (opt.mipValues.empty())
     throw std::runtime_error("--mip-values must not be empty");

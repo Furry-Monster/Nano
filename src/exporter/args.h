@@ -4,6 +4,8 @@
 #include <string>
 #include <vector>
 
+/// Exporter CLI options. indexCount = trianglesPerCluster*3, must match
+/// Init.glsl vertexCount. maxClustersPerMip fits into BVH NumChildren (9 bits).
 struct ExporterOptions {
   std::string inputPath;
   std::string outBvhPath;

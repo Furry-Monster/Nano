@@ -9,7 +9,7 @@ int main(int argc, char **argv) {
   try {
     const ExporterOptions opt = ParseArgs(argc, argv);
 
-    std::cout << "=== NaniteExporter ===\n";
+    std::cout << "=== NanoExporter ===\n";
     std::cout << "Input: " << opt.inputPath << "\n";
 
     const auto mesh = LoadMesh(opt.inputPath, opt.targetExtent);
@@ -35,16 +35,16 @@ int main(int argc, char **argv) {
     std::cout << "Encoding BVH...\n";
     EncodeBVH(build, opt.outBvhPath);
 
-    std::cout << "Encoding NaniteMesh...\n";
+    std::cout << "Encoding NanoMesh...\n";
     EncodeNaniteMesh(build, opt.indexCount, opt.outNaniteMeshPath);
 
     std::cout << "\nExport complete.\n"
               << "  BVH:        " << opt.outBvhPath << "\n"
-              << "  NaniteMesh: " << opt.outNaniteMeshPath << "\n";
+              << "  NanoMesh: " << opt.outNaniteMeshPath << "\n";
     return 0;
   } catch (const std::exception &e) {
     if (e.what()[0] != '\0')
-      std::cerr << "NaniteExporter error: " << e.what() << "\n";
+      std::cerr << "NanoExporter error: " << e.what() << "\n";
     return (e.what()[0] == '\0') ? 0 : 1;
   }
 }

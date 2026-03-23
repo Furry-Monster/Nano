@@ -7,8 +7,14 @@
 #include <iostream>
 #include <stdexcept>
 
-// BVH layout: 52 u32s/node. [0..15] LODBounds, [16..31] Misc0, [32..47] Misc1,
-// [48..51] Misc2. Matches NodeAndClusterCull.glsl.
+// BVH binary layout (must match NodeAndClusterCull.glsl)
+//   HIERARCHY_NODE_SLICE_SIZE = 13*4*4 = 208 bytes = 52 uint32s per node
+// Per node (52 uint32s):
+//   [0..15]  LODBounds  : child 0..3 x vec4 (center.xyz, radius)
+//   [16..31] Misc0      : child 0..3 x vec4 (boxCenter.xyz, half2(minLodErr,maxParentErr))
+//   [32..47] Misc1      : child 0..3 x vec4 (boxExtent.xyz, childStartRef)
+//   [48..51] Misc2      : child 0..3 x uint (packed leaf/internal marker)
+// Tree: root (node 0) -> 4 internal children (nodes 1-4) -> up to 4 leaves each = max 16 pages
 namespace {
 
 constexpr uint32_t kNodeU32Size = 52;
@@ -135,9 +141,20 @@ void EncodeBVH(const BuildResult &build, const std::string &outPath) {
             << " bytes\n";
 }
 
-// NaniteMesh: [0] pageCount, [1..n] pageOffsets. Per page: clusterCount,
-// clusterOffsets, cluster data. Per cluster: +0 indexOffset, +1 indexCount,
-// +2..5 LODBounds, +6 lodError|edgeLength, +7.. positions, then indices.
+// NanoMesh binary layout (must match HWRasterizeVS.glsl GetClusterInfo)
+// [0]                    pageCount
+// [1..pageCount]         pageByteOffsets (absolute from file start)
+// Per page (at pageByteOffset):
+//   [+0]                 clusterCount
+//   [+1..+clusterCount]  clusterByteOffsets (relative to cluster data start)
+//   cluster data...
+// Per cluster (at clusterDataStart + clusterByteOffset/4):
+//   [+0] indexDataOffsetLocal (bytes from cluster start to index array)
+//   [+1] indexCount (actual triangle indices, padded to indexCountPerCluster for HW draw)
+//   [+2..+5] LODBounds (cx, cy, cz, radius as float bits)
+//   [+6] lodError|edgeLength (half-packed)
+//   [+7..+7+numVerts*3-1] positions (xyz as float bits)
+//   [+7+numVerts*3..] indices (padded to indexCountPerCluster)
 void EncodeNaniteMesh(const BuildResult &build, uint32_t indexCountPerCluster,
                       const std::string &outPath) {
   const auto pageCount = static_cast<uint32_t>(build.pages.size());
@@ -202,7 +219,7 @@ void EncodeNaniteMesh(const BuildResult &build, uint32_t indexCountPerCluster,
   {
     const uint32_t actualBytes = static_cast<uint32_t>(out.size()) * 4u;
     if (actualBytes != absOffset) {
-      throw std::runtime_error("NaniteMesh size mismatch: written " +
+      throw std::runtime_error("NanoMesh size mismatch: written " +
                                std::to_string(actualBytes) +
                                " bytes, expected " + std::to_string(absOffset));
     }
@@ -243,6 +260,6 @@ void EncodeNaniteMesh(const BuildResult &build, uint32_t indexCountPerCluster,
 
   WriteU32File(outPath, out);
 
-  std::cout << "  NaniteMesh: " << pageCount << " pages, " << out.size() * 4
+  std::cout << "  NanoMesh: " << pageCount << " pages, " << out.size() * 4
             << " bytes\n";
 }

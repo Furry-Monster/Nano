@@ -50,7 +50,7 @@ src/
   math/                 - Custom math library (float4, matrix4, quaternion)
   render/               - Vulkan RHI, render passes, materials, meshes
   scene/                - Scene management and node hierarchy
-  exporter/             - Nanite BVH & NaniteMesh exporter (FBX, GLTF/GLB)
+  exporter/             - Nano BVH & NanoMesh exporter (FBX, GLTF/GLB)
 shaders/                - GLSL compute and graphics shaders
 res/                    - Runtime assets (BVH, Nanite mesh data)
 libs/                   - Third-party libraries (GLFW, GLM, ImGui, spdlog, stb)
@@ -70,11 +70,13 @@ libs/                   - Third-party libraries (GLFW, GLM, ImGui, spdlog, stb)
 
 ## Exporter
 
-Export FBX or GLTF/GLB models to BVH and NaniteMesh for use with Nano:
+Export FBX or GLTF/GLB models to BVH and NanoMesh for use with Nano:
 
 ```bash
-./bin/NaniteExporter --input model.fbx --out-bvh res/model.bvh --out-nanitemesh res/model.nanitemesh
+./bin/NanoExporter -i model.fbx
 ```
+
+Output: `model.bvh`, `model.nanomesh` (same dir as input). Use `-o dir`, `--bvh path`, `--mesh path` for custom paths.
 
 Optional: `--mip-values "0,1,2,3,4,5,6,7,8,10"`, `--triangles-per-cluster 128`, `--index-count 384`, `--target-extent 500`.
 

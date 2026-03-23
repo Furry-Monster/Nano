@@ -12,12 +12,12 @@
 static constexpr int kWindowWidth = 1280;
 static constexpr int kWindowHeight = 720;
 static const char *kDefaultBvh = "res/Cian_Dressup.bvh";
-static const char *kDefaultMesh = "res/Cian_Dressup.nanitemesh";
+static const char *kDefaultMesh = "res/Cian_Dressup.nanomesh";
 
 static void PrintUsage(const char *exe) {
   std::cout << "Usage: " << exe << " [options]\n"
             << "  --bvh <path>   BVH file (default: " << kDefaultBvh << ")\n"
-            << "  --mesh <path>  NaniteMesh file (default: " << kDefaultMesh
+            << "  --mesh <path>  NanoMesh file (default: " << kDefaultMesh
             << ")\n"
             << "  -h, --help     Show this help\n";
 }

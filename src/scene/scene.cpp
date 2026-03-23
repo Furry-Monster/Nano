@@ -247,12 +247,12 @@ void InitScene(int canvasWidth, int canvasHeight, const std::string &bvhPath,
 
     data = LoadFileContent(meshPath.c_str(), fileSize);
     if (!data || fileSize == 0)
-      throw std::runtime_error("Failed to load NaniteMesh: " + meshPath);
+      throw std::runtime_error("Failed to load NanoMesh: " + meshPath);
     sNaniteMesh = GenBufferObject(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
                                   VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, data,
                                   static_cast<int>(fileSize));
     delete[] data;
-    SetObjectName(VK_OBJECT_TYPE_BUFFER, sNaniteMesh->mBuffer, "NaniteMesh");
+    SetObjectName(VK_OBJECT_TYPE_BUFFER, sNaniteMesh->mBuffer, "NanoMesh");
   }
 
   sHzbFromPreviousFrameReady = false;

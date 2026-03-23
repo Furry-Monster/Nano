@@ -27,7 +27,7 @@ target_link_libraries(Nano PRIVATE reflibs)
 add_dependencies(Nano copy_resources)
 
 # Command-line model exporter:
-add_executable(NaniteExporter
+add_executable(NanoExporter
     exporter/main.cpp
     exporter/args.cpp
     exporter/mesh_loader.cpp
@@ -35,9 +35,9 @@ add_executable(NaniteExporter
     exporter/nanite_encode.cpp
 )
 
-target_include_directories(NaniteExporter PRIVATE
+target_include_directories(NanoExporter PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/..
 )
 
-target_link_libraries(NaniteExporter PRIVATE assimp::assimp meshoptimizer)
+target_link_libraries(NanoExporter PRIVATE assimp::assimp meshoptimizer)

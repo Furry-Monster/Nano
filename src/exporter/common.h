@@ -127,7 +127,10 @@ inline uint32_t PackLodErrorEdgeLength(float lodError, float edgeLength) {
   return PackHalf2x16(lodError, edgeLength);
 }
 
-// Misc2 layout (match NodeAndClusterCull.glsl): [0:8] NumChildren, [9:13] MipLevel
+// BVH Misc2 bit layout (must match NodeAndClusterCull.glsl):
+//   bits [0:8]   NumChildren (9 bits, max 511)
+//   bits [9:13]  MipLevel (5 bits, max 31; shader reads as "NumPages")
+//   bits [14:29] StartPageIndex (16 bits, reserved)
 inline uint32_t PackMisc2Leaf(uint32_t numChildren, uint32_t mipLevel) {
   return (numChildren & 0x1FFu) | ((mipLevel & 0x1Fu) << 9);
 }
