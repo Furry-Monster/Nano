@@ -10,6 +10,9 @@ LOD 0:
 LOD 3:
 ![demo_1](demo_1.png)
 
+Complicate Model:
+![demo_2](demo_2.png)
+
 ## Build
 
 ```bash
