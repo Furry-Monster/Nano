@@ -1,249 +1,307 @@
 #include "nanite_encode.h"
 
 #include <algorithm>
+#include <cassert>
 #include <cmath>
 #include <cstring>
+#include <iostream>
 #include <stdexcept>
+
+// ============================================================================
+// BVH binary layout  (must match NodeAndClusterCull.glsl)
+//
+//   HIERARCHY_NODE_SLICE_SIZE = (4+4+4+1) * 4 * NANITE_MAX_BVH_NODE_FANOUT
+//                             = 13 * 4 * 4 = 208 bytes = 52 uint32s per node
+//
+// Per node (52 uint32s):
+//   [0..15]  LODBounds  : child 0..3 x vec4 (center.xyz, radius)
+//   [16..31] Misc0      : child 0..3 x vec4 (boxCenter.xyz,
+//   half2(minLodErr,maxParentErr)) [32..47] Misc1      : child 0..3 x vec4
+//   (boxExtent.xyz, childStartRef) [48..51] Misc2      : child 0..3 x uint
+//   (packed leaf/internal marker)
+//
+// Two-level tree: root (node 0) → 4 internal children (nodes 1-4) → up to 4
+// leaves each = max 16 pages.
+// ============================================================================
 
 namespace {
 
-// Match NodeAndClusterCull.glsl HIERARCHY_NODE_SLICE_SIZE
-constexpr uint32_t kHierarchyNodeSliceSize = 52; // uints per node
-constexpr uint32_t kMaxBvhFanout = 4;
+constexpr uint32_t kNodeU32Size = 52;
+constexpr uint32_t kMaxFanout = 4;
+constexpr uint32_t kInternalNodeCount = 5; // root + 4 children
 
-inline uint32_t FloatBits(float v) {
+inline uint32_t FB(float v) {
   uint32_t u;
   std::memcpy(&u, &v, sizeof(float));
   return u;
 }
 
-// Simple half encode for small floats
-uint16_t FloatToHalfSimple(float v) {
-  uint32_t u;
-  std::memcpy(&u, &v, sizeof(uint32_t));
-  if (u == 0)
-    return 0;
-  const uint32_t sign = (u >> 31) << 15;
-  const uint32_t exp = ((u >> 23) & 0xFF);
-  if (exp == 0xFF)
-    return static_cast<uint16_t>(sign | 0x7C00u);
-  const int32_t iexp = static_cast<int32_t>(exp) - 127;
-  if (iexp < -24)
-    return static_cast<uint16_t>(sign);
-  if (iexp > 15)
-    return static_cast<uint16_t>(sign | 0x7C00u);
-  const uint32_t mantissa = (u >> 13) & 0x3FFu;
-  const uint32_t hexp = static_cast<uint32_t>(iexp + 15) << 10;
-  return static_cast<uint16_t>(sign | hexp | mantissa);
-}
+struct BvhWriter {
+  std::vector<uint32_t> &buf;
 
-void SetChildSliceWithHalf(std::vector<uint32_t> &bvh, uint32_t nodeIndex,
-                           uint32_t childIndex, float lodCenterX,
-                           float lodCenterY, float lodCenterZ, float lodRadius,
-                           float boxCenterX, float boxCenterY, float boxCenterZ,
-                           float boxExtentX, float boxExtentY, float boxExtentZ,
-                           float minLodError, float maxParentLodError,
-                           uint32_t childStartRef, uint32_t misc2) {
-  const uint32_t base = nodeIndex * kHierarchyNodeSliceSize;
-  const uint32_t r0Base = base + childIndex * 4;
-  bvh[r0Base + 0] = FloatBits(lodCenterX);
-  bvh[r0Base + 1] = FloatBits(lodCenterY);
-  bvh[r0Base + 2] = FloatBits(lodCenterZ);
-  bvh[r0Base + 3] = FloatBits(lodRadius);
-
-  const uint32_t r1Base = base + 16 + childIndex * 4;
-  bvh[r1Base + 0] = FloatBits(boxCenterX);
-  bvh[r1Base + 1] = FloatBits(boxCenterY);
-  bvh[r1Base + 2] = FloatBits(boxCenterZ);
-  bvh[r1Base + 3] =
-      static_cast<uint32_t>(FloatToHalfSimple(minLodError)) |
-      (static_cast<uint32_t>(FloatToHalfSimple(maxParentLodError)) << 16);
-
-  const uint32_t r2Base = base + 32 + childIndex * 4;
-  bvh[r2Base + 0] = FloatBits(boxExtentX);
-  bvh[r2Base + 1] = FloatBits(boxExtentY);
-  bvh[r2Base + 2] = FloatBits(boxExtentZ);
-  bvh[r2Base + 3] = childStartRef;
-
-  bvh[base + 48 + childIndex] = misc2;
-}
-
-void ComputePageBounds(const ClusterPage &page, Vec3 &outCenter,
-                       Vec3 &outExtent, float &outLodRadius) {
-  Vec3 bmin{1e30f, 1e30f, 1e30f};
-  Vec3 bmax{-1e30f, -1e30f, -1e30f};
-  for (const auto &cl : page.clusters) {
-    bmin.x = std::min(bmin.x, cl.boundsMin.x);
-    bmin.y = std::min(bmin.y, cl.boundsMin.y);
-    bmin.z = std::min(bmin.z, cl.boundsMin.z);
-    bmax.x = std::max(bmax.x, cl.boundsMax.x);
-    bmax.y = std::max(bmax.y, cl.boundsMax.y);
-    bmax.z = std::max(bmax.z, cl.boundsMax.z);
+  void setLODBounds(uint32_t node, uint32_t child, const Sphere &s) const {
+    uint32_t base = node * kNodeU32Size + child * 4;
+    buf[base + 0] = FB(s.center.x);
+    buf[base + 1] = FB(s.center.y);
+    buf[base + 2] = FB(s.center.z);
+    buf[base + 3] = FB(s.radius);
   }
-  outCenter.x = (bmin.x + bmax.x) * 0.5f;
-  outCenter.y = (bmin.y + bmax.y) * 0.5f;
-  outCenter.z = (bmin.z + bmax.z) * 0.5f;
-  outExtent.x = (bmax.x - bmin.x) * 0.5f;
-  outExtent.y = (bmax.y - bmin.y) * 0.5f;
-  outExtent.z = (bmax.z - bmin.z) * 0.5f;
-  const float dx = bmax.x - bmin.x, dy = bmax.y - bmin.y, dz = bmax.z - bmin.z;
-  outLodRadius = 0.5f * std::sqrt(dx * dx + dy * dy + dz * dz);
-}
+
+  void setMisc0(uint32_t node, uint32_t child, const Vec3 &boxCenter,
+                float minLodErr, float maxParentErr) const {
+    uint32_t base = node * kNodeU32Size + 16 + child * 4;
+    buf[base + 0] = FB(boxCenter.x);
+    buf[base + 1] = FB(boxCenter.y);
+    buf[base + 2] = FB(boxCenter.z);
+    buf[base + 3] = PackHalf2x16(minLodErr, maxParentErr);
+  }
+
+  void setMisc1(uint32_t node, uint32_t child, const Vec3 &boxExtent,
+                uint32_t childStartRef) const {
+    uint32_t base = node * kNodeU32Size + 32 + child * 4;
+    buf[base + 0] = FB(boxExtent.x);
+    buf[base + 1] = FB(boxExtent.y);
+    buf[base + 2] = FB(boxExtent.z);
+    buf[base + 3] = childStartRef;
+  }
+
+  void setMisc2(uint32_t node, uint32_t child, uint32_t misc2) const {
+    buf[node * kNodeU32Size + 48 + child] = misc2;
+  }
+
+  void setLeaf(uint32_t node, uint32_t child, const Sphere &lodSphere,
+               const AABB &box, float minLodErr, float maxParentErr,
+               uint32_t childStartRef, uint32_t misc2) const {
+    setLODBounds(node, child, lodSphere);
+    setMisc0(node, child, box.center(), minLodErr, maxParentErr);
+    setMisc1(node, child, box.halfExtent(), childStartRef);
+    setMisc2(node, child, misc2);
+  }
+
+  void setEmpty(uint32_t node, uint32_t child) const {
+    setLODBounds(node, child, {{0, 0, 0}, 0.f});
+    setMisc0(node, child, {0, 0, 0}, 0.f, 0.f);
+    setMisc1(node, child, {0, 0, 0}, kChildRefInvalid);
+    setMisc2(node, child, 0u);
+  }
+};
 
 } // namespace
 
+// ============================================================================
+// EncodeBVH
+// ============================================================================
+
 void EncodeBVH(const BuildResult &build, const std::string &outPath) {
-  const size_t numPages = build.pages.size();
-  if (numPages == 0) {
-    throw std::runtime_error("No pages to encode");
-  }
+  const uint32_t numPages = static_cast<uint32_t>(build.pages.size());
+  if (numPages == 0)
+    throw std::runtime_error("No pages to encode into BVH");
 
-  const uint32_t numLeaves = static_cast<uint32_t>(numPages);
-  // Two-level BVH: root (node 0) has 4 children (nodes 1-4), each with up to 4
-  // leaf children. Supports up to 16 pages. If more, we only encode first 16.
-  const uint32_t maxPages = std::min(numLeaves, 16u);
-  const uint32_t numInternalNodes = 5; // root + 4 children
-  std::vector<uint32_t> bvh(numInternalNodes * kHierarchyNodeSliceSize, 0);
+  const uint32_t maxPages = std::min(numPages, 16u);
 
-  for (uint32_t parent = 0; parent < 4; ++parent) {
+  std::vector<uint32_t> bvh(kInternalNodeCount * kNodeU32Size, 0);
+  BvhWriter wr{bvh};
+
+  for (uint32_t parent = 0; parent < kMaxFanout; ++parent) {
     const uint32_t nodeIndex = 1 + parent;
-    const uint32_t pageStart = parent * 4;
-    const uint32_t pageEnd = std::min(pageStart + 4, maxPages);
+    const uint32_t pageStart = parent * kMaxFanout;
+    const uint32_t pageEnd = std::min(pageStart + kMaxFanout, maxPages);
 
     if (pageStart >= maxPages) {
-      for (uint32_t c = 0; c < kMaxBvhFanout; ++c) {
-        SetChildSliceWithHalf(bvh, nodeIndex, c, 0, 0, 0, 1.f, 0, 0, 0, 0, 0, 0,
-                              0.f, 0.f, 0xFFFFFFFFu, 0u);
-      }
+      // No pages for this group — fill every child slot as empty.
+      for (uint32_t c = 0; c < kMaxFanout; ++c)
+        wr.setEmpty(nodeIndex, c);
+      // Root's child: mark as internal (will traverse but find all empty).
+      wr.setLeaf(0, parent, {{0, 0, 0}, 0.f}, AABB{}, 0.f, 0.f, nodeIndex,
+                 kMisc2InternalNode);
       continue;
     }
 
-    Vec3 groupCenter{0, 0, 0}, groupExtent{0, 0, 0};
-    float groupRadius = 0.f;
-    int numGroupPages = 0;
+    // --- Fill leaf children of this internal node --------------------------
+    AABB groupBox; // union AABB across all pages in this group
+    Sphere groupSphere;
 
-    for (uint32_t c = 0; c < kMaxBvhFanout; ++c) {
+    for (uint32_t c = 0; c < kMaxFanout; ++c) {
       const uint32_t pageIdx = pageStart + c;
+
       if (pageIdx >= pageEnd) {
-        SetChildSliceWithHalf(bvh, nodeIndex, c, 0, 0, 0, 1.f, 0, 0, 0, 0, 0, 0,
-                              0.f, 0.f, 0xFFFFFFFFu, 0u);
+        wr.setEmpty(nodeIndex, c);
         continue;
       }
 
-      const auto &page = build.pages[pageIdx];
-      Vec3 center, extent;
-      float lodRadius;
-      ComputePageBounds(page, center, extent, lodRadius);
-      groupCenter.x += center.x;
-      groupCenter.y += center.y;
-      groupCenter.z += center.z;
-      groupExtent.x = std::max(groupExtent.x, extent.x);
-      groupExtent.y = std::max(groupExtent.y, extent.y);
-      groupExtent.z = std::max(groupExtent.z, extent.z);
-      groupRadius = std::max(groupRadius, lodRadius);
-      numGroupPages++;
-
+      const ClusterPage &page = build.pages[pageIdx];
       const uint32_t clusterCount = static_cast<uint32_t>(page.clusters.size());
-      if (clusterCount > 511u) {
-        throw std::runtime_error("clusterCount > 511");
-      }
+      if (clusterCount > 511u)
+        throw std::runtime_error("Cluster count > 511 on page " +
+                                 std::to_string(pageIdx));
+
       const uint32_t childStartRef = (pageIdx << 8) | 0u;
-      const uint32_t misc2 = PackMisc2Leaf(clusterCount, page.mipLevel, 0);
-      SetChildSliceWithHalf(bvh, nodeIndex, c, center.x, center.y, center.z,
-                            lodRadius, center.x, center.y, center.z, extent.x,
-                            extent.y, extent.z, 0.f, 1e10f, childStartRef,
-                            misc2);
+      const uint32_t misc2 =
+          PackMisc2Leaf(clusterCount, static_cast<uint32_t>(page.mipLevel));
+
+      wr.setLeaf(nodeIndex, c, page.lodSphere, page.bounds, 0.f, 1e10f,
+                 childStartRef, misc2);
+
+      groupBox.expand(page.bounds);
+      groupSphere = MergeSpheres(groupSphere, page.lodSphere);
     }
 
-    if (numGroupPages > 0) {
-      groupCenter.x /= numGroupPages;
-      groupCenter.y /= numGroupPages;
-      groupCenter.z /= numGroupPages;
-    }
-
-    // Root's child points to node 1-4
-    SetChildSliceWithHalf(
-        bvh, 0, parent, groupCenter.x, groupCenter.y, groupCenter.z,
-        groupRadius, groupCenter.x, groupCenter.y, groupCenter.z, groupExtent.x,
-        groupExtent.y, groupExtent.z, 0.f, 1e10f, nodeIndex, 0xFFFFFFFFu);
+    // --- Root's child pointing to this internal node -----------------------
+    wr.setLeaf(0, parent, groupSphere, groupBox, 0.f, 1e10f, nodeIndex,
+               kMisc2InternalNode);
   }
 
   WriteU32File(outPath, bvh);
+
+  std::cout << "  BVH: " << kInternalNodeCount << " nodes, " << bvh.size() * 4
+            << " bytes\n";
 }
+
+// ============================================================================
+// NaniteMesh binary layout  (must match HWRasterizeVS.glsl GetClusterInfo)
+//
+// [0]                         pageCount
+// [1 .. pageCount]            pageByteOffsets (absolute from file start)
+//
+// Per page (at pageByteOffset):
+//   [+0]                      clusterCount
+//   [+1 .. +clusterCount]     clusterByteOffsets (relative to cluster data
+//   start) cluster data ...
+//
+// Per cluster (at clusterDataStart + clusterByteOffset/4):
+//   [+0] indexDataOffsetLocal  (bytes from cluster start to index array)
+//   [+1] indexCount            (actual triangle indices, not padded)
+//   [+2..+5] LODBounds         (cx, cy, cz, radius as float bits)
+//   [+6] lodError|edgeLength   (half-packed)
+//   [+7 .. +7+numVerts*3-1] positions (xyz as float bits)
+//   [+7+numVerts*3 .. ] indices (padded to indexCountPerCluster)
+// ============================================================================
 
 void EncodeNaniteMesh(const BuildResult &build, uint32_t indexCountPerCluster,
                       const std::string &outPath) {
+  const auto pageCount = static_cast<uint32_t>(build.pages.size());
+
   std::vector<uint32_t> out;
-  out.reserve(4 * 1024 * 1024);
+  out.reserve(4u * 1024u * 1024u);
 
-  const uint32_t pageCount = static_cast<uint32_t>(build.pages.size());
+  // --- Header: page count + page offset table -----------------------------
   out.push_back(pageCount);
-  out.resize(1 + pageCount, 0);
+  out.resize(1 + pageCount, 0); // placeholder offsets
 
-  uint32_t runningOffsetBytes = (1 + pageCount) * 4u;
+  // Running absolute byte offset (starts after header + page offset table).
+  uint32_t absOffset = (1 + pageCount) * 4u;
 
   for (uint32_t pi = 0; pi < pageCount; ++pi) {
-    const auto &page = build.pages[pi];
-    out[1 + pi] = runningOffsetBytes;
-
+    const ClusterPage &page = build.pages[pi];
     const uint32_t clusterCount = static_cast<uint32_t>(page.clusters.size());
+
+    // Record absolute byte offset for this page.
+    out[1 + pi] = absOffset;
+
     if (clusterCount == 0)
       continue;
 
+    // --- Page header: cluster count + per-cluster byte offsets -------------
     out.push_back(clusterCount);
-    const size_t clusterOffsetsStart = out.size();
-    out.resize(out.size() + clusterCount, 0);
 
-    uint32_t clusterDataOffsetBytes = 0;
+    const size_t clusterOffsetsStart = out.size();
+    out.resize(out.size() + clusterCount, 0); // placeholders
+
+    // --- Per-cluster data --------------------------------------------------
+    uint32_t clusterRelOffset = 0; // bytes from cluster-data-start
 
     for (uint32_t ci = 0; ci < clusterCount; ++ci) {
-      const auto &cl = page.clusters[ci];
-      out[clusterOffsetsStart + ci] = clusterDataOffsetBytes;
+      const Cluster &cl = page.clusters[ci];
+
+      // Record this cluster's byte offset within the page's cluster data.
+      out[clusterOffsetsStart + ci] = clusterRelOffset;
 
       const uint32_t numVerts = static_cast<uint32_t>(cl.positions.size());
-      const uint32_t indexDataOffsetLocal = 7 * 4u + numVerts * 3u * 4u;
+      const uint32_t numIdx = static_cast<uint32_t>(cl.indices.size());
 
-      out.push_back(indexDataOffsetLocal);
-      out.push_back(static_cast<uint32_t>(cl.indices.size()));
-      const float cx = (cl.boundsMin.x + cl.boundsMax.x) * 0.5f;
-      const float cy = (cl.boundsMin.y + cl.boundsMax.y) * 0.5f;
-      const float cz = (cl.boundsMin.z + cl.boundsMax.z) * 0.5f;
-      const float r = 0.5f * std::sqrt((cl.boundsMax.x - cl.boundsMin.x) *
-                                           (cl.boundsMax.x - cl.boundsMin.x) +
-                                       (cl.boundsMax.y - cl.boundsMin.y) *
-                                           (cl.boundsMax.y - cl.boundsMin.y) +
-                                       (cl.boundsMax.z - cl.boundsMin.z) *
-                                           (cl.boundsMax.z - cl.boundsMin.z));
-      out.push_back(FloatBits(cx));
-      out.push_back(FloatBits(cy));
-      out.push_back(FloatBits(cz));
-      out.push_back(FloatBits(r));
-      out.push_back(PackLodErrorEdgeLength(cl.lodError, cl.edgeLength));
+      // 7 header uint32s + numVerts*3 position floats, then indices follow.
+      const uint32_t indexDataOffsetBytes = (7u + numVerts * 3u) * 4u;
 
-      for (const auto &p : cl.positions) {
-        out.push_back(FloatBits(p.x));
-        out.push_back(FloatBits(p.y));
-        out.push_back(FloatBits(p.z));
+      out.push_back(indexDataOffsetBytes); // [+0]
+      out.push_back(numIdx);               // [+1]
+
+      // LOD bounding sphere (center.xyz, radius).
+      out.push_back(FloatBitsToU32(cl.lodSphere.center.x)); // [+2]
+      out.push_back(FloatBitsToU32(cl.lodSphere.center.y)); // [+3]
+      out.push_back(FloatBitsToU32(cl.lodSphere.center.z)); // [+4]
+      out.push_back(FloatBitsToU32(cl.lodSphere.radius));   // [+5]
+
+      out.push_back(PackLodErrorEdgeLength(cl.lodError, cl.edgeLength)); // [+6]
+
+      // Vertex positions.
+      for (const Vec3 &p : cl.positions) {
+        out.push_back(FloatBitsToU32(p.x));
+        out.push_back(FloatBitsToU32(p.y));
+        out.push_back(FloatBitsToU32(p.z));
       }
 
-      std::vector<uint32_t> indexRemap(indexCountPerCluster, 0);
-      const uint32_t copyCount = std::min(
-          static_cast<uint32_t>(cl.indices.size()), indexCountPerCluster);
-      for (uint32_t k = 0; k < copyCount; ++k) {
-        indexRemap[k] = cl.indices[k];
-      }
-      for (uint32_t k = copyCount; k < indexCountPerCluster; ++k) {
-        indexRemap[k] = 0;
-      }
-      for (uint32_t k = 0; k < indexCountPerCluster; ++k) {
-        out.push_back(indexRemap[k]);
-      }
+      // Indices, padded to indexCountPerCluster for the HW draw call.
+      const uint32_t copyCount = std::min(numIdx, indexCountPerCluster);
+      for (uint32_t k = 0; k < copyCount; ++k)
+        out.push_back(cl.indices[k]);
+      for (uint32_t k = copyCount; k < indexCountPerCluster; ++k)
+        out.push_back(0u);
 
-      clusterDataOffsetBytes += (7 + numVerts * 3 + indexCountPerCluster) * 4u;
+      clusterRelOffset += (7u + numVerts * 3u + indexCountPerCluster) * 4u;
     }
 
-    runningOffsetBytes += 4u + clusterCount * 4u + clusterDataOffsetBytes;
+    // Advance absolute offset past this entire page.
+    // Page = count(4) + clusterCount*offset(4) + clusterData
+    const uint32_t pageBytes = 4u + clusterCount * 4u + clusterRelOffset;
+    absOffset += pageBytes;
+  }
+
+  // ---- Verification pass: check that out.size()*4 == absOffset -----------
+  {
+    const uint32_t actualBytes = static_cast<uint32_t>(out.size()) * 4u;
+    if (actualBytes != absOffset) {
+      throw std::runtime_error("NaniteMesh size mismatch: written " +
+                               std::to_string(actualBytes) +
+                               " bytes, expected " + std::to_string(absOffset));
+    }
+  }
+
+  // ---- Verification pass: read-back check page/cluster offsets -----------
+  for (uint32_t pi = 0; pi < pageCount; ++pi) {
+    const uint32_t pageByteOff = out[1 + pi];
+    if (pageByteOff % 4 != 0)
+      throw std::runtime_error("Page offset not 4-aligned");
+    const uint32_t pageBase = pageByteOff / 4;
+    if (pageBase >= out.size())
+      throw std::runtime_error("Page offset out of bounds");
+
+    const uint32_t cc = out[pageBase];
+    if (cc != static_cast<uint32_t>(build.pages[pi].clusters.size()))
+      throw std::runtime_error("Cluster count mismatch in verification");
+
+    for (uint32_t ci = 0; ci < cc; ++ci) {
+      const uint32_t clOff = out[pageBase + 1 + ci];
+      if (clOff % 4 != 0)
+        throw std::runtime_error("Cluster offset not 4-aligned");
+
+      const uint32_t clBase = pageBase + 1 + cc + clOff / 4;
+      if (clBase + 7 > out.size())
+        throw std::runtime_error("Cluster header out of bounds");
+
+      const uint32_t idxOff = out[clBase]; // indexDataOffsetLocal
+      if (idxOff % 4 != 0)
+        throw std::runtime_error("Index data offset not 4-aligned");
+
+      const uint32_t idxBase = clBase + idxOff / 4;
+      if (idxBase + build.pages[pi].clusters[ci].indices.size() > out.size())
+        throw std::runtime_error("Index data out of bounds for page " +
+                                 std::to_string(pi) + " cluster " +
+                                 std::to_string(ci));
+    }
   }
 
   WriteU32File(outPath, out);
+
+  std::cout << "  NaniteMesh: " << pageCount << " pages, " << out.size() * 4
+            << " bytes\n";
 }

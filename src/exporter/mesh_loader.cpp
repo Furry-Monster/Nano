@@ -6,7 +6,7 @@
 
 #include <algorithm>
 #include <cmath>
-#include <limits>
+#include <iostream>
 #include <stdexcept>
 #include <string>
 
@@ -14,29 +14,42 @@ namespace {
 
 constexpr float kEpsilon = 1e-9f;
 
+std::string ToLower(const std::string &s) {
+  std::string out = s;
+  std::transform(out.begin(), out.end(), out.begin(), ::tolower);
+  return out;
+}
+
+bool EndsWith(const std::string &s, const std::string &suffix) {
+  if (suffix.size() > s.size())
+    return false;
+  return s.compare(s.size() - suffix.size(), suffix.size(), suffix) == 0;
+}
+
 uint32_t GetAssimpFlags(const std::string &path) {
-  std::string lower = path;
-  std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
-  const bool isGlb =
-      lower.size() >= 4 && lower.substr(lower.size() - 4) == ".glb";
-  const bool isGltf =
-      lower.size() >= 5 && lower.substr(lower.size() - 5) == ".gltf";
-  const bool isFbx =
-      lower.size() >= 4 && lower.substr(lower.size() - 4) == ".fbx";
-
+  const std::string lower = ToLower(path);
   uint32_t flags = aiProcess_Triangulate | aiProcess_JoinIdenticalVertices |
-                   aiProcess_GenNormals | // Ensure normals if missing
-                   aiProcess_ImproveCacheLocality | aiProcess_OptimizeMeshes;
+                   aiProcess_ImproveCacheLocality | aiProcess_OptimizeMeshes |
+                   aiProcess_PreTransformVertices;
 
-  if (isGlb || isGltf) {
-    // GLTF/GLB: pre-transform for single-mesh output
-    flags |= aiProcess_PreTransformVertices;
-  }
-  if (isFbx) {
-    flags |= aiProcess_PreTransformVertices;
+  if (EndsWith(lower, ".fbx")) {
+    flags |= aiProcess_GenNormals;
+  } else if (EndsWith(lower, ".gltf") || EndsWith(lower, ".glb")) {
+    flags |= aiProcess_GenNormals;
+  } else {
+    flags |= aiProcess_GenNormals;
   }
 
   return flags;
+}
+
+// Triangle area via cross product. Returns 0 for degenerate triangles.
+float TriangleArea(const Vec3 &a, const Vec3 &b, const Vec3 &c) {
+  Vec3 ab = b - a;
+  Vec3 ac = c - a;
+  Vec3 cross{ab.y * ac.z - ab.z * ac.y, ab.z * ac.x - ab.x * ac.z,
+             ab.x * ac.y - ab.y * ac.x};
+  return 0.5f * cross.length();
 }
 
 } // namespace
@@ -46,13 +59,11 @@ LoadedMesh LoadMesh(const std::string &inputPath, float targetExtent) {
   const uint32_t flags = GetAssimpFlags(inputPath);
   const aiScene *scene = importer.ReadFile(inputPath, flags);
 
-  if (!scene || !scene->mRootNode) {
+  if (!scene || !scene->mRootNode)
     throw std::runtime_error("Assimp failed: " +
                              std::string(importer.GetErrorString()));
-  }
-  if (scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE) {
+  if (scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE)
     throw std::runtime_error("Assimp scene incomplete");
-  }
 
   LoadedMesh out;
   out.positions.reserve(256 * 1024);
@@ -64,9 +75,8 @@ LoadedMesh LoadMesh(const std::string &inputPath, float targetExtent) {
       continue;
 
     const uint32_t baseVertex = static_cast<uint32_t>(out.positions.size());
-    const unsigned int vCount = mesh->mNumVertices;
 
-    for (unsigned int vi = 0; vi < vCount; ++vi) {
+    for (unsigned int vi = 0; vi < mesh->mNumVertices; ++vi) {
       const aiVector3D &p = mesh->mVertices[vi];
       out.positions.push_back({p.x, p.y, p.z});
     }
@@ -75,46 +85,57 @@ LoadedMesh LoadMesh(const std::string &inputPath, float targetExtent) {
       const aiFace &face = mesh->mFaces[fi];
       if (face.mNumIndices != 3)
         continue;
-      out.triangles.push_back(
-          {baseVertex + static_cast<uint32_t>(face.mIndices[0]),
-           baseVertex + static_cast<uint32_t>(face.mIndices[1]),
-           baseVertex + static_cast<uint32_t>(face.mIndices[2])});
+      out.triangles.push_back({baseVertex + face.mIndices[0],
+                               baseVertex + face.mIndices[1],
+                               baseVertex + face.mIndices[2]});
     }
   }
 
-  if (out.triangles.empty() || out.positions.empty()) {
-    throw std::runtime_error("No geometry: empty triangles or vertices");
+  if (out.positions.empty() || out.triangles.empty())
+    throw std::runtime_error("No geometry found in " + inputPath);
+
+  // Remove degenerate triangles (zero-area or duplicate-vertex).
+  {
+    size_t before = out.triangles.size();
+    out.triangles.erase(
+        std::remove_if(out.triangles.begin(), out.triangles.end(),
+                       [&](const Triangle &t) {
+                         if (t.a == t.b || t.b == t.c || t.a == t.c)
+                           return true;
+                         float area = TriangleArea(out.positions[t.a],
+                                                   out.positions[t.b],
+                                                   out.positions[t.c]);
+                         return area < 1e-12f;
+                       }),
+        out.triangles.end());
+    size_t removed = before - out.triangles.size();
+    if (removed > 0)
+      std::cout << "  Removed " << removed << " degenerate triangles\n";
   }
 
-  // Bounds and normalize to target extent
-  Vec3 bmin{std::numeric_limits<float>::infinity(),
-            std::numeric_limits<float>::infinity(),
-            std::numeric_limits<float>::infinity()};
-  Vec3 bmax{-std::numeric_limits<float>::infinity(),
-            -std::numeric_limits<float>::infinity(),
-            -std::numeric_limits<float>::infinity()};
+  if (out.triangles.empty())
+    throw std::runtime_error("All triangles degenerate in " + inputPath);
 
-  for (const auto &p : out.positions) {
-    bmin.x = std::min(bmin.x, p.x);
-    bmin.y = std::min(bmin.y, p.y);
-    bmin.z = std::min(bmin.z, p.z);
-    bmax.x = std::max(bmax.x, p.x);
-    bmax.y = std::max(bmax.y, p.y);
-    bmax.z = std::max(bmax.z, p.z);
-  }
+  // Center and scale to targetExtent.
+  AABB box;
+  for (const auto &p : out.positions)
+    box.expand(p);
 
-  Vec3 center{(bmin.x + bmax.x) * 0.5f, (bmin.y + bmax.y) * 0.5f,
-              (bmin.z + bmax.z) * 0.5f};
-  float extent = std::max({bmax.x - bmin.x, bmax.y - bmin.y, bmax.z - bmin.z});
-  if (extent < kEpsilon)
-    extent = 1.0f;
-  const float scale = targetExtent / extent;
+  Vec3 center = box.center();
+  float extent = std::max({box.hi.x - box.lo.x, box.hi.y - box.lo.y,
+                           box.hi.z - box.lo.z, kEpsilon});
+  float scale = targetExtent / extent;
 
   for (auto &p : out.positions) {
     p.x = (p.x - center.x) * scale;
     p.y = (p.y - center.y) * scale;
     p.z = (p.z - center.z) * scale;
   }
+
+  std::cout << "  Mesh loaded: " << out.positions.size() << " vertices, "
+            << out.triangles.size() << " triangles\n";
+  std::cout << "  Scaled to extent " << targetExtent << " (original " << extent
+            << ")\n";
 
   return out;
 }
