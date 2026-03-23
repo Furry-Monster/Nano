@@ -7,23 +7,8 @@
 #include <iostream>
 #include <stdexcept>
 
-// ============================================================================
-// BVH binary layout  (must match NodeAndClusterCull.glsl)
-//
-//   HIERARCHY_NODE_SLICE_SIZE = (4+4+4+1) * 4 * NANITE_MAX_BVH_NODE_FANOUT
-//                             = 13 * 4 * 4 = 208 bytes = 52 uint32s per node
-//
-// Per node (52 uint32s):
-//   [0..15]  LODBounds  : child 0..3 x vec4 (center.xyz, radius)
-//   [16..31] Misc0      : child 0..3 x vec4 (boxCenter.xyz,
-//   half2(minLodErr,maxParentErr)) [32..47] Misc1      : child 0..3 x vec4
-//   (boxExtent.xyz, childStartRef) [48..51] Misc2      : child 0..3 x uint
-//   (packed leaf/internal marker)
-//
-// Two-level tree: root (node 0) → 4 internal children (nodes 1-4) → up to 4
-// leaves each = max 16 pages.
-// ============================================================================
-
+// BVH layout: 52 u32s/node. [0..15] LODBounds, [16..31] Misc0, [32..47] Misc1,
+// [48..51] Misc2. Matches NodeAndClusterCull.glsl.
 namespace {
 
 constexpr uint32_t kNodeU32Size = 52;
@@ -88,10 +73,6 @@ struct BvhWriter {
 
 } // namespace
 
-// ============================================================================
-// EncodeBVH
-// ============================================================================
-
 void EncodeBVH(const BuildResult &build, const std::string &outPath) {
   const uint32_t numPages = static_cast<uint32_t>(build.pages.size());
   if (numPages == 0)
@@ -108,7 +89,6 @@ void EncodeBVH(const BuildResult &build, const std::string &outPath) {
     const uint32_t pageEnd = std::min(pageStart + kMaxFanout, maxPages);
 
     if (pageStart >= maxPages) {
-      // No pages for this group — fill every child slot as empty.
       for (uint32_t c = 0; c < kMaxFanout; ++c)
         wr.setEmpty(nodeIndex, c);
       // Root's child: mark as internal (will traverse but find all empty).
@@ -117,8 +97,7 @@ void EncodeBVH(const BuildResult &build, const std::string &outPath) {
       continue;
     }
 
-    // --- Fill leaf children of this internal node --------------------------
-    AABB groupBox; // union AABB across all pages in this group
+    AABB groupBox;
     Sphere groupSphere;
 
     for (uint32_t c = 0; c < kMaxFanout; ++c) {
@@ -146,7 +125,6 @@ void EncodeBVH(const BuildResult &build, const std::string &outPath) {
       groupSphere = MergeSpheres(groupSphere, page.lodSphere);
     }
 
-    // --- Root's child pointing to this internal node -----------------------
     wr.setLeaf(0, parent, groupSphere, groupBox, 0.f, 1e10f, nodeIndex,
                kMisc2InternalNode);
   }
@@ -157,26 +135,9 @@ void EncodeBVH(const BuildResult &build, const std::string &outPath) {
             << " bytes\n";
 }
 
-// ============================================================================
-// NaniteMesh binary layout  (must match HWRasterizeVS.glsl GetClusterInfo)
-//
-// [0]                         pageCount
-// [1 .. pageCount]            pageByteOffsets (absolute from file start)
-//
-// Per page (at pageByteOffset):
-//   [+0]                      clusterCount
-//   [+1 .. +clusterCount]     clusterByteOffsets (relative to cluster data
-//   start) cluster data ...
-//
-// Per cluster (at clusterDataStart + clusterByteOffset/4):
-//   [+0] indexDataOffsetLocal  (bytes from cluster start to index array)
-//   [+1] indexCount            (actual triangle indices, not padded)
-//   [+2..+5] LODBounds         (cx, cy, cz, radius as float bits)
-//   [+6] lodError|edgeLength   (half-packed)
-//   [+7 .. +7+numVerts*3-1] positions (xyz as float bits)
-//   [+7+numVerts*3 .. ] indices (padded to indexCountPerCluster)
-// ============================================================================
-
+// NaniteMesh: [0] pageCount, [1..n] pageOffsets. Per page: clusterCount,
+// clusterOffsets, cluster data. Per cluster: +0 indexOffset, +1 indexCount,
+// +2..5 LODBounds, +6 lodError|edgeLength, +7.. positions, then indices.
 void EncodeNaniteMesh(const BuildResult &build, uint32_t indexCountPerCluster,
                       const std::string &outPath) {
   const auto pageCount = static_cast<uint32_t>(build.pages.size());
@@ -184,63 +145,47 @@ void EncodeNaniteMesh(const BuildResult &build, uint32_t indexCountPerCluster,
   std::vector<uint32_t> out;
   out.reserve(4u * 1024u * 1024u);
 
-  // --- Header: page count + page offset table -----------------------------
   out.push_back(pageCount);
   out.resize(1 + pageCount, 0); // placeholder offsets
 
   // Running absolute byte offset (starts after header + page offset table).
   uint32_t absOffset = (1 + pageCount) * 4u;
-
   for (uint32_t pi = 0; pi < pageCount; ++pi) {
     const ClusterPage &page = build.pages[pi];
     const uint32_t clusterCount = static_cast<uint32_t>(page.clusters.size());
 
-    // Record absolute byte offset for this page.
     out[1 + pi] = absOffset;
-
     if (clusterCount == 0)
       continue;
 
-    // --- Page header: cluster count + per-cluster byte offsets -------------
     out.push_back(clusterCount);
 
     const size_t clusterOffsetsStart = out.size();
-    out.resize(out.size() + clusterCount, 0); // placeholders
-
-    // --- Per-cluster data --------------------------------------------------
-    uint32_t clusterRelOffset = 0; // bytes from cluster-data-start
+    out.resize(out.size() + clusterCount, 0);
+    uint32_t clusterRelOffset = 0;
 
     for (uint32_t ci = 0; ci < clusterCount; ++ci) {
       const Cluster &cl = page.clusters[ci];
-
-      // Record this cluster's byte offset within the page's cluster data.
       out[clusterOffsetsStart + ci] = clusterRelOffset;
 
       const uint32_t numVerts = static_cast<uint32_t>(cl.positions.size());
       const uint32_t numIdx = static_cast<uint32_t>(cl.indices.size());
-
-      // 7 header uint32s + numVerts*3 position floats, then indices follow.
       const uint32_t indexDataOffsetBytes = (7u + numVerts * 3u) * 4u;
 
-      out.push_back(indexDataOffsetBytes); // [+0]
-      out.push_back(numIdx);               // [+1]
+      out.push_back(indexDataOffsetBytes);
+      out.push_back(numIdx);
+      out.push_back(FloatBitsToU32(cl.lodSphere.center.x));
+      out.push_back(FloatBitsToU32(cl.lodSphere.center.y));
+      out.push_back(FloatBitsToU32(cl.lodSphere.center.z));
+      out.push_back(FloatBitsToU32(cl.lodSphere.radius));
+      out.push_back(PackLodErrorEdgeLength(cl.lodError, cl.edgeLength));
 
-      // LOD bounding sphere (center.xyz, radius).
-      out.push_back(FloatBitsToU32(cl.lodSphere.center.x)); // [+2]
-      out.push_back(FloatBitsToU32(cl.lodSphere.center.y)); // [+3]
-      out.push_back(FloatBitsToU32(cl.lodSphere.center.z)); // [+4]
-      out.push_back(FloatBitsToU32(cl.lodSphere.radius));   // [+5]
-
-      out.push_back(PackLodErrorEdgeLength(cl.lodError, cl.edgeLength)); // [+6]
-
-      // Vertex positions.
       for (const Vec3 &p : cl.positions) {
         out.push_back(FloatBitsToU32(p.x));
         out.push_back(FloatBitsToU32(p.y));
         out.push_back(FloatBitsToU32(p.z));
       }
 
-      // Indices, padded to indexCountPerCluster for the HW draw call.
       const uint32_t copyCount = std::min(numIdx, indexCountPerCluster);
       for (uint32_t k = 0; k < copyCount; ++k)
         out.push_back(cl.indices[k]);
@@ -250,13 +195,10 @@ void EncodeNaniteMesh(const BuildResult &build, uint32_t indexCountPerCluster,
       clusterRelOffset += (7u + numVerts * 3u + indexCountPerCluster) * 4u;
     }
 
-    // Advance absolute offset past this entire page.
-    // Page = count(4) + clusterCount*offset(4) + clusterData
     const uint32_t pageBytes = 4u + clusterCount * 4u + clusterRelOffset;
     absOffset += pageBytes;
   }
 
-  // ---- Verification pass: check that out.size()*4 == absOffset -----------
   {
     const uint32_t actualBytes = static_cast<uint32_t>(out.size()) * 4u;
     if (actualBytes != absOffset) {
@@ -266,7 +208,6 @@ void EncodeNaniteMesh(const BuildResult &build, uint32_t indexCountPerCluster,
     }
   }
 
-  // ---- Verification pass: read-back check page/cluster offsets -----------
   for (uint32_t pi = 0; pi < pageCount; ++pi) {
     const uint32_t pageByteOff = out[1 + pi];
     if (pageByteOff % 4 != 0)

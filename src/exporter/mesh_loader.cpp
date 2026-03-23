@@ -43,7 +43,6 @@ uint32_t GetAssimpFlags(const std::string &path) {
   return flags;
 }
 
-// Triangle area via cross product. Returns 0 for degenerate triangles.
 float TriangleArea(const Vec3 &a, const Vec3 &b, const Vec3 &c) {
   Vec3 ab = b - a;
   Vec3 ac = c - a;
@@ -116,7 +115,6 @@ LoadedMesh LoadMesh(const std::string &inputPath, float targetExtent) {
   if (out.triangles.empty())
     throw std::runtime_error("All triangles degenerate in " + inputPath);
 
-  // Center and scale to targetExtent.
   AABB box;
   for (const auto &p : out.positions)
     box.expand(p);

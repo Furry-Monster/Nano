@@ -40,8 +40,4 @@ target_include_directories(NaniteExporter PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..
 )
 
-if(TARGET assimp::assimp)
-    target_link_libraries(NaniteExporter PRIVATE assimp::assimp meshoptimizer)
-else()
-    target_link_libraries(NaniteExporter PRIVATE assimp meshoptimizer)
-endif()
+target_link_libraries(NaniteExporter PRIVATE assimp::assimp meshoptimizer)

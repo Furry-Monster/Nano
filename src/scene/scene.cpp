@@ -14,6 +14,7 @@
 #include <cmath>
 #include <cstdio>
 #include <spdlog/spdlog.h>
+#include <stdexcept>
 #include <vector>
 
 static constexpr int kBufferSize4MB = 4194304;
@@ -143,7 +144,8 @@ static unsigned char *LoadFileContent(const char *path, size_t &outSize) {
   return content;
 }
 
-void InitScene(int canvasWidth, int canvasHeight) {
+void InitScene(int canvasWidth, int canvasHeight, const std::string &bvhPath,
+               const std::string &meshPath) {
   StaticMesh::InitVertexLayout();
 
   sProjectionMatrix.Perspective(
@@ -233,7 +235,9 @@ void InitScene(int canvasWidth, int canvasHeight) {
     size_t fileSize = 0;
     unsigned char *data = nullptr;
 
-    data = LoadFileContent("res/Cian_Dressup.bvh", fileSize);
+    data = LoadFileContent(bvhPath.c_str(), fileSize);
+    if (!data || fileSize == 0)
+      throw std::runtime_error("Failed to load BVH: " + bvhPath);
     sBVHBuffer = GenBufferObject(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
                                  VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, data,
                                  static_cast<int>(fileSize));
@@ -241,7 +245,9 @@ void InitScene(int canvasWidth, int canvasHeight) {
     SetObjectName(VK_OBJECT_TYPE_BUFFER, sBVHBuffer->mBuffer,
                   "HierarchyBuffer");
 
-    data = LoadFileContent("res/Cian_Dressup.nanitemesh", fileSize);
+    data = LoadFileContent(meshPath.c_str(), fileSize);
+    if (!data || fileSize == 0)
+      throw std::runtime_error("Failed to load NaniteMesh: " + meshPath);
     sNaniteMesh = GenBufferObject(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
                                   VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, data,
                                   static_cast<int>(fileSize));

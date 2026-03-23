@@ -16,8 +16,7 @@ constexpr uint32_t kMaxTotalPages = 16;
 
 float EdgeLen(const Vec3 &a, const Vec3 &b) { return (b - a).length(); }
 
-// ---- Morton code for 3D spatial sorting (10 bits per axis) ----------------
-
+// Morton3D: 10 bits/axis for spatial sort (cluster coherence)
 uint32_t ExpandBits10(uint32_t v) {
   v &= 0x3FFu;
   v = (v | (v << 16)) & 0x030000FFu;
@@ -71,8 +70,6 @@ void SortTrianglesSpatially(std::vector<Triangle> &tris,
   tris = std::move(sorted);
 }
 
-// ---- Mesh simplification via meshoptimizer --------------------------------
-
 struct SimplifiedMesh {
   std::vector<Vec3> positions;
   std::vector<Triangle> triangles;
@@ -105,7 +102,6 @@ SimplifiedMesh SimplifyMesh(const std::vector<Vec3> &srcPositions,
 
   simplified.resize(simplifiedIndexCount);
 
-  // Compact: remap to only the vertices actually used
   std::vector<unsigned int> remap(srcPositions.size(), UINT32_MAX);
   uint32_t newVertCount = 0;
   for (unsigned int idx : simplified) {
@@ -129,8 +125,6 @@ SimplifiedMesh SimplifyMesh(const std::vector<Vec3> &srcPositions,
 
   return result;
 }
-
-// ---- Cluster construction -------------------------------------------------
 
 std::vector<Cluster> MakeClusters(const std::vector<Triangle> &tris,
                                   const std::vector<Vec3> &positions,
@@ -242,9 +236,9 @@ BuildResult BuildClustersAndPages(const LoadedMesh &mesh,
       posPtr = &simplified.positions;
       triPtr = &simplified.triangles;
 
-      std::cout << "  mip " << mipLevel << ": simplified "
+      std::cout << "  mip " << mipLevel << ": "
                 << mesh.triangles.size() << " -> " << simplified.triangles.size()
-                << " tris (" << simplified.positions.size() << " verts)\n";
+                << " tris\n";
     }
 
     auto trisMip = *triPtr;
@@ -257,7 +251,6 @@ BuildResult BuildClustersAndPages(const LoadedMesh &mesh,
     rawMips.push_back({mipLevel, std::move(clusters)});
   }
 
-  // Split into pages (max maxClustersPerMip clusters per page)
   BuildResult result;
   result.mipLevels = mipValues;
 

@@ -13,6 +13,9 @@ LOD 3:
 ## Build
 
 ```bash
+# Import git submodules
+git submodule update --init --recursive
+
 # Compile shaders
 cd shaders && chmod +x compile.sh && ./compile.sh && cd ..
 
@@ -33,11 +36,11 @@ LOD auto mode uses distance from the camera to the reference point `(0, 80, 0)` 
 
 ## Dependencies
 
-- CMake 3.20+
+- CMake 3.22+
 - C++17 (Clang recommended, MSVC not supported)
 - Vulkan SDK 1.2+
-- GLFW
-- glslc (from Vulkan SDK)
+- GLFW, glslc (from Vulkan SDK)
+- Assimp and meshoptimizer (git submodules in libs/)
 
 ## Project Structure
 
