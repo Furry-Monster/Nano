@@ -12,6 +12,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # Model exporter dependency (Assimp)
 find_package(assimp REQUIRED)
 
+
 # Enable compile commands export for clang-tidy
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 

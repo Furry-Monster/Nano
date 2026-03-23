@@ -14,3 +14,6 @@
 	path = libs/spdlog
 	url = https://github.com/gabime/spdlog.git
 
+[submodule "libs/meshoptimizer"]
+	path = libs/meshoptimizer
+	url = https://github.com/zeux/meshoptimizer.git

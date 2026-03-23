@@ -1,5 +1,7 @@
 #include "cluster_builder.h"
 
+#include <meshoptimizer.h>
+
 #include <algorithm>
 #include <cmath>
 #include <iostream>
@@ -29,9 +31,6 @@ uint32_t Morton3D(uint32_t x, uint32_t y, uint32_t z) {
   return ExpandBits10(x) | (ExpandBits10(y) << 1) | (ExpandBits10(z) << 2);
 }
 
-// Sort triangles by Morton code of centroid so that spatially nearby triangles
-// end up in the same cluster.  This is the key to producing solid-looking
-// cluster patches instead of scattered individual triangles.
 void SortTrianglesSpatially(std::vector<Triangle> &tris,
                             const std::vector<Vec3> &positions) {
   if (tris.size() <= 1)
@@ -72,20 +71,63 @@ void SortTrianglesSpatially(std::vector<Triangle> &tris,
   tris = std::move(sorted);
 }
 
-// ---- Decimation -----------------------------------------------------------
+// ---- Mesh simplification via meshoptimizer --------------------------------
 
-std::vector<Triangle> DecimateTris(const std::vector<Triangle> &tris,
-                                   uint64_t step) {
-  if (step <= 1)
-    return tris;
-  std::vector<Triangle> out;
-  const size_t n = tris.size();
-  out.reserve((n + step - 1) / step);
-  for (size_t i = 0; i < n; i += step)
-    out.push_back(tris[i]);
-  if (out.empty() && !tris.empty())
-    out.push_back(tris[0]);
-  return out;
+struct SimplifiedMesh {
+  std::vector<Vec3> positions;
+  std::vector<Triangle> triangles;
+};
+
+SimplifiedMesh SimplifyMesh(const std::vector<Vec3> &srcPositions,
+                            const std::vector<Triangle> &srcTriangles,
+                            size_t targetTriCount) {
+  if (srcTriangles.size() <= targetTriCount) {
+    return {srcPositions, srcTriangles};
+  }
+
+  std::vector<unsigned int> indices;
+  indices.reserve(srcTriangles.size() * 3);
+  for (const auto &t : srcTriangles) {
+    indices.push_back(t.a);
+    indices.push_back(t.b);
+    indices.push_back(t.c);
+  }
+
+  size_t targetIndexCount = targetTriCount * 3;
+  float targetError = 1e-1f;
+  unsigned int options = meshopt_SimplifyLockBorder;
+
+  std::vector<unsigned int> simplified(indices.size());
+  size_t simplifiedIndexCount = meshopt_simplify(
+      simplified.data(), indices.data(), indices.size(),
+      reinterpret_cast<const float *>(srcPositions.data()), srcPositions.size(),
+      sizeof(Vec3), targetIndexCount, targetError, options, nullptr);
+
+  simplified.resize(simplifiedIndexCount);
+
+  // Compact: remap to only the vertices actually used
+  std::vector<unsigned int> remap(srcPositions.size(), UINT32_MAX);
+  uint32_t newVertCount = 0;
+  for (unsigned int idx : simplified) {
+    if (remap[idx] == UINT32_MAX)
+      remap[idx] = newVertCount++;
+  }
+
+  SimplifiedMesh result;
+  result.positions.resize(newVertCount);
+  for (size_t i = 0; i < srcPositions.size(); ++i) {
+    if (remap[i] != UINT32_MAX)
+      result.positions[remap[i]] = srcPositions[i];
+  }
+
+  result.triangles.reserve(simplifiedIndexCount / 3);
+  for (size_t i = 0; i + 2 < simplifiedIndexCount; i += 3) {
+    result.triangles.push_back(
+        {remap[simplified[i]], remap[simplified[i + 1]],
+         remap[simplified[i + 2]]});
+  }
+
+  return result;
 }
 
 // ---- Cluster construction -------------------------------------------------
@@ -93,10 +135,9 @@ std::vector<Triangle> DecimateTris(const std::vector<Triangle> &tris,
 std::vector<Cluster> MakeClusters(const std::vector<Triangle> &tris,
                                   const std::vector<Vec3> &positions,
                                   uint32_t trianglesPerCluster,
-                                  uint64_t decimationStep) {
+                                  float lodErrorEstimate) {
   std::vector<Cluster> clusters;
 
-  // Per-cluster local vertex pool; reset only touched entries between clusters.
   std::vector<int32_t> globalToLocal(positions.size(), -1);
   std::vector<uint32_t> usedVerts;
   usedVerts.reserve(trianglesPerCluster * 3);
@@ -144,7 +185,6 @@ std::vector<Cluster> MakeClusters(const std::vector<Triangle> &tris,
           {maxEdge, EdgeLen(va, vb), EdgeLen(vb, vc), EdgeLen(vc, va)});
     }
 
-    // Reset only touched entries (O(k) instead of O(n)).
     for (uint32_t gid : usedVerts)
       globalToLocal[gid] = -1;
 
@@ -152,11 +192,7 @@ std::vector<Cluster> MakeClusters(const std::vector<Triangle> &tris,
     cl.lodSphere =
         ComputeBoundingSphere(cl.positions.data(), cl.positions.size());
     cl.edgeLength = maxEdge;
-
-    const float extent = std::max(
-        {box.hi.x - box.lo.x, box.hi.y - box.lo.y, box.hi.z - box.lo.z,
-         kEpsilon});
-    cl.lodError = extent * static_cast<float>(decimationStep) * 0.5f;
+    cl.lodError = lodErrorEstimate;
 
     clusters.push_back(std::move(cl));
   }
@@ -175,10 +211,13 @@ BuildResult BuildClustersAndPages(const LoadedMesh &mesh,
   if (trianglesPerCluster == 0)
     throw std::runtime_error("trianglesPerCluster must be > 0");
 
-  // maxClustersPerMip is now the per-PAGE cluster cap (hardware limit from 9-bit
-  // Misc2 field = 511).  A single mip level can span multiple pages.
+  const float meshDiagonal = [&] {
+    AABB box;
+    for (const auto &p : mesh.positions)
+      box.expand(p);
+    return box.diagonal();
+  }();
 
-  // ---- Phase 1: build all clusters per mip (spatial sort, no artificial cap)
   struct RawMip {
     int mipLevel;
     std::vector<Cluster> clusters;
@@ -187,21 +226,38 @@ BuildResult BuildClustersAndPages(const LoadedMesh &mesh,
 
   for (size_t mipIdx = 0; mipIdx < mipValues.size(); ++mipIdx) {
     const int mipLevel = mipValues[mipIdx];
-    const uint64_t step =
-        static_cast<uint64_t>(std::max(1, 1 << std::min(mipLevel, 20)));
 
-    auto trisMip = DecimateTris(mesh.triangles, step);
+    const std::vector<Vec3> *posPtr = &mesh.positions;
+    const std::vector<Triangle> *triPtr = &mesh.triangles;
+    SimplifiedMesh simplified;
 
-    // Spatial sort BEFORE clustering -- the critical step for visual quality.
-    SortTrianglesSpatially(trisMip, mesh.positions);
+    if (mipLevel > 0) {
+      float reductionFactor = std::pow(0.5f, static_cast<float>(mipLevel));
+      size_t targetTriCount = std::max(
+          size_t(1),
+          static_cast<size_t>(mesh.triangles.size() * reductionFactor));
 
-    auto clusters = MakeClusters(trisMip, mesh.positions,
-                                 trianglesPerCluster, step);
+      simplified =
+          SimplifyMesh(mesh.positions, mesh.triangles, targetTriCount);
+      posPtr = &simplified.positions;
+      triPtr = &simplified.triangles;
+
+      std::cout << "  mip " << mipLevel << ": simplified "
+                << mesh.triangles.size() << " -> " << simplified.triangles.size()
+                << " tris (" << simplified.positions.size() << " verts)\n";
+    }
+
+    auto trisMip = *triPtr;
+    SortTrianglesSpatially(trisMip, *posPtr);
+
+    float lodError = meshDiagonal * (1 << mipLevel) * 0.001f;
+    auto clusters =
+        MakeClusters(trisMip, *posPtr, trianglesPerCluster, lodError);
 
     rawMips.push_back({mipLevel, std::move(clusters)});
   }
 
-  // ---- Phase 2: split into pages (max maxClustersPerMip clusters per page)
+  // Split into pages (max maxClustersPerMip clusters per page)
   BuildResult result;
   result.mipLevels = mipValues;
 
@@ -226,7 +282,6 @@ BuildResult BuildClustersAndPages(const LoadedMesh &mesh,
     }
   }
 
-  // ---- Phase 3: honour the 16-page BVH leaf limit
   if (result.pages.size() > kMaxTotalPages) {
     std::cout << "  Warning: " << result.pages.size()
               << " pages needed, trimming to " << kMaxTotalPages

@@ -36,6 +36,13 @@ if(NOT TARGET stb)
     target_include_directories(stb INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/stb)
 endif()
 
+if(NOT TARGET meshoptimizer)
+    set(MESHOPT_BUILD_DEMO OFF CACHE BOOL "..." FORCE)
+    set(MESHOPT_BUILD_TOOLS OFF CACHE BOOL "..." FORCE)
+    set(MESHOPT_BUILD_SHARED_LIBS OFF CACHE BOOL "..." FORCE)
+    add_subdirectory(meshoptimizer)
+endif()
+
 if(NOT TARGET spdlog)
     set(SPDLOG_BUILD_EXAMPLE OFF CACHE BOOL "..." FORCE)
     set(SPDLOG_BUILD_TESTS OFF CACHE BOOL "..." FORCE)

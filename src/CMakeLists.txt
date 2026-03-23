@@ -41,7 +41,7 @@ target_include_directories(NaniteExporter PRIVATE
 )
 
 if(TARGET assimp::assimp)
-    target_link_libraries(NaniteExporter PRIVATE assimp::assimp)
+    target_link_libraries(NaniteExporter PRIVATE assimp::assimp meshoptimizer)
 else()
-    target_link_libraries(NaniteExporter PRIVATE assimp)
+    target_link_libraries(NaniteExporter PRIVATE assimp meshoptimizer)
 endif()
