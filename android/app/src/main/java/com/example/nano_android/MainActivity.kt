@@ -1,5 +1,6 @@
 package com.example.nano_android
 
+import android.content.Intent
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -37,6 +38,12 @@ class MainActivity : AppCompatActivity(), SurfaceHolder.Callback {
 
         NanoRenderer.nativeInit(assets)
 
+        val bvhPath = intent.getStringExtra(ModelSelectActivity.EXTRA_BVH_PATH)
+        val meshPath = intent.getStringExtra(ModelSelectActivity.EXTRA_MESH_PATH)
+        if (bvhPath != null && meshPath != null) {
+            NanoRenderer.nativeSetModelPaths(bvhPath, meshPath)
+        }
+
         surfaceView = findViewById(R.id.vulkan_surface)
         surfaceView.holder.addCallback(this)
         surfaceView.setOnTouchListener { _, event ->
@@ -53,6 +60,10 @@ class MainActivity : AppCompatActivity(), SurfaceHolder.Callback {
         }
         findViewById<Button>(R.id.btn_lod_down).setOnClickListener {
             NanoRenderer.nativeLODDown()
+        }
+        findViewById<Button>(R.id.btn_back_select).setOnClickListener {
+            startActivity(Intent(this, ModelSelectActivity::class.java))
+            finish()
         }
     }
 

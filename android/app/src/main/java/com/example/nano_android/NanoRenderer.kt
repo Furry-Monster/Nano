@@ -10,6 +10,7 @@ object NanoRenderer {
     }
 
     external fun nativeInit(assetManager: AssetManager)
+    external fun nativeSetModelPaths(bvhPath: String, meshPath: String)
     external fun nativeSurfaceCreated(surface: Surface, width: Int, height: Int)
     external fun nativeSurfaceDestroyed()
     external fun nativeOnTouch(action: Int, pointerCount: Int, x: Float, y: Float)

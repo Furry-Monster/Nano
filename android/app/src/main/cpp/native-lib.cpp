@@ -27,6 +27,9 @@ static int sSurfaceHeight = 0;
 static const char *kDefaultBvh = "res/Mitsuba/mitsuba.bvh";
 static const char *kDefaultMesh = "res/Mitsuba/mitsuba.nanomesh";
 
+static std::string sBvhPath = kDefaultBvh;
+static std::string sMeshPath = kDefaultMesh;
+
 static void InitSpdlogAndroid() {
     auto sink = std::make_shared<spdlog::sinks::android_sink_mt>("Nano");
     auto logger = std::make_shared<spdlog::logger>("nano", sink);
@@ -51,8 +54,7 @@ static void RenderThreadFunc() {
     }
 
     try {
-        InitScene(sSurfaceWidth, sSurfaceHeight,
-                  std::string(kDefaultBvh), std::string(kDefaultMesh));
+        InitScene(sSurfaceWidth, sSurfaceHeight, sBvhPath, sMeshPath);
     } catch (const std::exception &e) {
         spdlog::error("InitScene failed: {}", e.what());
         return;
@@ -87,6 +89,21 @@ Java_com_example_nano_1android_NanoRenderer_nativeInit(
     SetAndroidAssetManager(mgr);
     InputInitFromLookAt(-330.0f, 330.0f, -330.0f, 0.0f, 80.0f, 0.0f);
     spdlog::info("Native init complete");
+}
+
+JNIEXPORT void JNICALL
+Java_com_example_nano_1android_NanoRenderer_nativeSetModelPaths(
+    JNIEnv *env, jobject, jstring bvhPath, jstring meshPath) {
+    if (bvhPath && meshPath) {
+        const char *bvh = env->GetStringUTFChars(bvhPath, nullptr);
+        const char *mesh = env->GetStringUTFChars(meshPath, nullptr);
+        if (bvh && mesh) {
+            sBvhPath = bvh;
+            sMeshPath = mesh;
+            env->ReleaseStringUTFChars(bvhPath, bvh);
+            env->ReleaseStringUTFChars(meshPath, mesh);
+        }
+    }
 }
 
 JNIEXPORT void JNICALL

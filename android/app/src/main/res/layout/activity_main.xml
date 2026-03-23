@@ -65,11 +65,23 @@
                 android:id="@+id/btn_lod_down"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:layout_marginEnd="4dp"
                 android:minWidth="0dp"
                 android:minHeight="0dp"
                 android:paddingHorizontal="8dp"
                 android:paddingVertical="4dp"
                 android:text="LOD-"
+                android:textSize="11sp" />
+
+            <Button
+                android:id="@+id/btn_back_select"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minWidth="0dp"
+                android:minHeight="0dp"
+                android:paddingHorizontal="8dp"
+                android:paddingVertical="4dp"
+                android:text="返回"
                 android:textSize="11sp" />
         </LinearLayout>
     </LinearLayout>
