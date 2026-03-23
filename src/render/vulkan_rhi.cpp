@@ -96,6 +96,18 @@ static std::vector<const char *> GetValidationLayers() {
   return layers;
 }
 
+static bool IsInstanceExtensionAvailable(const char *name) {
+  uint32_t count = 0;
+  vkEnumerateInstanceExtensionProperties(nullptr, &count, nullptr);
+  std::vector<VkExtensionProperties> props(count);
+  vkEnumerateInstanceExtensionProperties(nullptr, &count, props.data());
+  for (const auto &p : props) {
+    if (std::strcmp(p.extensionName, name) == 0)
+      return true;
+  }
+  return false;
+}
+
 static bool InitInstance() {
   VkApplicationInfo appInfo = {};
   appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
@@ -117,8 +129,10 @@ static bool InitInstance() {
 #endif
 
 #ifndef NDEBUG
-  extensions.push_back(VK_EXT_DEBUG_REPORT_EXTENSION_NAME);
-  extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+  if (IsInstanceExtensionAvailable(VK_EXT_DEBUG_REPORT_EXTENSION_NAME))
+    extensions.push_back(VK_EXT_DEBUG_REPORT_EXTENSION_NAME);
+  if (IsInstanceExtensionAvailable(VK_EXT_DEBUG_UTILS_EXTENSION_NAME))
+    extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
 #endif
 
   auto validationLayers = GetValidationLayers();
@@ -281,15 +295,31 @@ static bool InitLogicDevice() {
 
   const char *deviceExtensions[] = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
 
+  VkPhysicalDeviceShaderAtomicInt64Features supportedAtomic64 = {};
+  supportedAtomic64.sType =
+      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_INT64_FEATURES;
+  VkPhysicalDeviceFeatures2 supportedFeatures2 = {};
+  supportedFeatures2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+  supportedFeatures2.pNext = &supportedAtomic64;
+  vkGetPhysicalDeviceFeatures2(sGPU, &supportedFeatures2);
+
+  spdlog::info("Device features: shaderInt64={}, fragmentStoresAndAtomics={}, "
+               "shaderBufferInt64Atomics={}",
+               supportedFeatures2.features.shaderInt64,
+               supportedFeatures2.features.fragmentStoresAndAtomics,
+               supportedAtomic64.shaderBufferInt64Atomics);
+
   VkPhysicalDeviceShaderAtomicInt64Features atomic64 = {};
   atomic64.sType =
       VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_INT64_FEATURES;
-  atomic64.shaderBufferInt64Atomics = VK_TRUE;
+  atomic64.shaderBufferInt64Atomics =
+      supportedAtomic64.shaderBufferInt64Atomics;
 
   VkPhysicalDeviceFeatures2 features2 = {};
   features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
-  features2.features.shaderInt64 = VK_TRUE;
-  features2.features.fragmentStoresAndAtomics = VK_TRUE;
+  features2.features.shaderInt64 = supportedFeatures2.features.shaderInt64;
+  features2.features.fragmentStoresAndAtomics =
+      supportedFeatures2.features.fragmentStoresAndAtomics;
 #ifndef __ANDROID__
   features2.features.fillModeNonSolid = VK_TRUE;
 #endif
