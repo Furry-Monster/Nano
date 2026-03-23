@@ -41,6 +41,8 @@ void main() {
         WorkArgs1.mData[3] = 0u;
         WorkArgs1.mData[5] = 0u;
         WorkArgs1.mData[6] = 1u;
+
+        MainAndPostNodeAndClusterBatches.mData[0] = 0u;
     }
 
     int pixelIndex = texcoord.y * 1280 + texcoord.x;

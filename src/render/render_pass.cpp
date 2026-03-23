@@ -261,7 +261,7 @@ void RenderPass::Build(uint32_t canvasWidth, uint32_t canvasHeight) {
     raster.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
     raster.polygonMode = VK_POLYGON_MODE_FILL;
     raster.lineWidth = 1.0f;
-    raster.cullMode = VK_CULL_MODE_BACK_BIT;
+    raster.cullMode = VK_CULL_MODE_NONE;
     raster.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
 
     VkPipelineMultisampleStateCreateInfo multisample = {};
@@ -273,9 +273,8 @@ void RenderPass::Build(uint32_t canvasWidth, uint32_t canvasHeight) {
     VkPipelineDepthStencilStateCreateInfo depthStencil = {};
     depthStencil.sType =
         VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-    depthStencil.depthTestEnable = VK_TRUE;
-    depthStencil.depthWriteEnable = VK_TRUE;
-    depthStencil.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
+    depthStencil.depthTestEnable = VK_FALSE;
+    depthStencil.depthWriteEnable = VK_FALSE;
 
     VkPipelineColorBlendAttachmentState blendAttach = {};
     blendAttach.colorWriteMask =
