@@ -17,9 +17,9 @@ int main(int argc, char **argv) {
         mesh, opt.mipValues, opt.trianglesPerCluster, opt.maxClustersPerMip);
 
     std::cout << "Built: " << build.pages.size() << " pages (mips)\n";
-    for (size_t i = 0; i < build.pages.size(); ++i) {
-      std::cout << "  mip " << build.pages[i].mipLevel << ": "
-                << build.pages[i].clusters.size() << " clusters\n";
+    for (const auto &page : build.pages) {
+      std::cout << "  mip " << page.mipLevel << ": " << page.clusters.size()
+                << " clusters\n";
     }
 
     EncodeBVH(build, opt.outBvhPath);

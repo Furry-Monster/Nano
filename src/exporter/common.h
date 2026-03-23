@@ -25,14 +25,16 @@ inline uint32_t FloatToU32(float v) {
   return out;
 }
 
-// Pack float to half (16-bit) for LODError/EdgeLength. Matches GLSL unpackHalf2x16.
+// Pack float to half (16-bit) for LODError/EdgeLength. Matches GLSL
+// unpackHalf2x16.
 inline uint16_t FloatToHalf(float v) {
   uint32_t u;
   std::memcpy(&u, &v, sizeof(uint32_t));
   const uint32_t sign = (u >> 16) & 0x8000u;
   const uint32_t exp_mant = u & 0x7FFFFFFFu;
   if (exp_mant >= 0x7F800000u)
-    return static_cast<uint16_t>(sign | (exp_mant > 0x7F800000u ? 0x7E00u : 0x7C00u));
+    return static_cast<uint16_t>(sign |
+                                 (exp_mant > 0x7F800000u ? 0x7E00u : 0x7C00u));
   if (exp_mant < 0x38800000u)
     return static_cast<uint16_t>(sign);
   const uint32_t shifted = exp_mant - 0x38000000u + (0x1000u << 13);
@@ -44,8 +46,9 @@ inline uint32_t PackLodErrorEdgeLength(float lodError, float edgeLength) {
          (static_cast<uint32_t>(FloatToHalf(edgeLength)) << 16);
 }
 
-// Misc2 for BVH leaf: NumChildren (9 bits), NumPages/MipLevel (5 bits), StartPageIndex (16 bits).
-// Must match NodeAndClusterCull.glsl BitFieldExtractU32 decoding.
+// Misc2 for BVH leaf: NumChildren (9 bits), NumPages/MipLevel (5 bits),
+// StartPageIndex (16 bits). Must match NodeAndClusterCull.glsl
+// BitFieldExtractU32 decoding.
 inline uint32_t PackMisc2Leaf(uint32_t numChildren, uint32_t mipLevel,
                               uint32_t /*startPageIndex unused for leaf*/) {
   constexpr uint32_t kNumChildrenBits = 9;

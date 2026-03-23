@@ -233,7 +233,7 @@ void InitScene(int canvasWidth, int canvasHeight) {
     size_t fileSize = 0;
     unsigned char *data = nullptr;
 
-    data = LoadFileContent("res/Cian_Dressup.bvh", fileSize);
+    data = LoadFileContent("res/Aqua/aqua.bvh", fileSize);
     sBVHBuffer = GenBufferObject(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
                                  VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, data,
                                  static_cast<int>(fileSize));
@@ -241,7 +241,7 @@ void InitScene(int canvasWidth, int canvasHeight) {
     SetObjectName(VK_OBJECT_TYPE_BUFFER, sBVHBuffer->mBuffer,
                   "HierarchyBuffer");
 
-    data = LoadFileContent("res/Cian_Dressup.nanitemesh", fileSize);
+    data = LoadFileContent("res/Aqua/aqua.nanitemesh", fileSize);
     sNaniteMesh = GenBufferObject(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
                                   VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, data,
                                   static_cast<int>(fileSize));

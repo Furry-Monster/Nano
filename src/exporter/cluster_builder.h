@@ -8,7 +8,7 @@
 
 struct Cluster {
   std::vector<Vec3> positions;
-  std::vector<uint32_t> indices;  // triangle list into positions
+  std::vector<uint32_t> indices; // triangle list into positions
   Vec3 boundsMin;
   Vec3 boundsMax;
   float lodError = 0.f;
@@ -25,7 +25,8 @@ struct BuildResult {
   std::vector<int> mipLevels;
 };
 
-/// Build clusters and pages from mesh. LOD via decimation; clusters grouped by mip.
+/// Build clusters and pages from mesh. LOD via decimation; clusters grouped by
+/// mip.
 BuildResult BuildClustersAndPages(const LoadedMesh &mesh,
                                   const std::vector<int> &mipValues,
                                   uint32_t trianglesPerCluster,

@@ -3,13 +3,12 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
-#include <fstream>
 #include <stdexcept>
 
 namespace {
 
 // Match NodeAndClusterCull.glsl HIERARCHY_NODE_SLICE_SIZE
-constexpr uint32_t kHierarchyNodeSliceSize = 52;  // uints per node
+constexpr uint32_t kHierarchyNodeSliceSize = 52; // uints per node
 constexpr uint32_t kMaxBvhFanout = 4;
 
 inline uint32_t FloatBits(float v) {
@@ -22,13 +21,17 @@ inline uint32_t FloatBits(float v) {
 uint16_t FloatToHalfSimple(float v) {
   uint32_t u;
   std::memcpy(&u, &v, sizeof(uint32_t));
-  if (u == 0) return 0;
+  if (u == 0)
+    return 0;
   const uint32_t sign = (u >> 31) << 15;
   const uint32_t exp = ((u >> 23) & 0xFF);
-  if (exp == 0xFF) return static_cast<uint16_t>(sign | 0x7C00u);
+  if (exp == 0xFF)
+    return static_cast<uint16_t>(sign | 0x7C00u);
   const int32_t iexp = static_cast<int32_t>(exp) - 127;
-  if (iexp < -24) return static_cast<uint16_t>(sign);
-  if (iexp > 15) return static_cast<uint16_t>(sign | 0x7C00u);
+  if (iexp < -24)
+    return static_cast<uint16_t>(sign);
+  if (iexp > 15)
+    return static_cast<uint16_t>(sign | 0x7C00u);
   const uint32_t mantissa = (u >> 13) & 0x3FFu;
   const uint32_t hexp = static_cast<uint32_t>(iexp + 15) << 10;
   return static_cast<uint16_t>(sign | hexp | mantissa);
@@ -65,8 +68,8 @@ void SetChildSliceWithHalf(std::vector<uint32_t> &bvh, uint32_t nodeIndex,
   bvh[base + 48 + childIndex] = misc2;
 }
 
-void ComputePageBounds(const ClusterPage &page, Vec3 &outCenter, Vec3 &outExtent,
-                       float &outLodRadius) {
+void ComputePageBounds(const ClusterPage &page, Vec3 &outCenter,
+                       Vec3 &outExtent, float &outLodRadius) {
   Vec3 bmin{1e30f, 1e30f, 1e30f};
   Vec3 bmax{-1e30f, -1e30f, -1e30f};
   for (const auto &cl : page.clusters) {
@@ -87,7 +90,7 @@ void ComputePageBounds(const ClusterPage &page, Vec3 &outCenter, Vec3 &outExtent
   outLodRadius = 0.5f * std::sqrt(dx * dx + dy * dy + dz * dz);
 }
 
-}  // namespace
+} // namespace
 
 void EncodeBVH(const BuildResult &build, const std::string &outPath) {
   const size_t numPages = build.pages.size();
@@ -96,10 +99,10 @@ void EncodeBVH(const BuildResult &build, const std::string &outPath) {
   }
 
   const uint32_t numLeaves = static_cast<uint32_t>(numPages);
-  // Two-level BVH: root (node 0) has 4 children (nodes 1-4), each with up to 4 leaf children.
-  // Supports up to 16 pages. If more, we only encode first 16.
+  // Two-level BVH: root (node 0) has 4 children (nodes 1-4), each with up to 4
+  // leaf children. Supports up to 16 pages. If more, we only encode first 16.
   const uint32_t maxPages = std::min(numLeaves, 16u);
-  const uint32_t numInternalNodes = 5;  // root + 4 children
+  const uint32_t numInternalNodes = 5; // root + 4 children
   std::vector<uint32_t> bvh(numInternalNodes * kHierarchyNodeSliceSize, 0);
 
   for (uint32_t parent = 0; parent < 4; ++parent) {
@@ -140,17 +143,16 @@ void EncodeBVH(const BuildResult &build, const std::string &outPath) {
       groupRadius = std::max(groupRadius, lodRadius);
       numGroupPages++;
 
-      const uint32_t clusterCount =
-          static_cast<uint32_t>(page.clusters.size());
+      const uint32_t clusterCount = static_cast<uint32_t>(page.clusters.size());
       if (clusterCount > 511u) {
         throw std::runtime_error("clusterCount > 511");
       }
       const uint32_t childStartRef = (pageIdx << 8) | 0u;
       const uint32_t misc2 = PackMisc2Leaf(clusterCount, page.mipLevel, 0);
       SetChildSliceWithHalf(bvh, nodeIndex, c, center.x, center.y, center.z,
-                            lodRadius, center.x, center.y, center.z,
-                            extent.x, extent.y, extent.z, 0.f, 1e10f,
-                            childStartRef, misc2);
+                            lodRadius, center.x, center.y, center.z, extent.x,
+                            extent.y, extent.z, 0.f, 1e10f, childStartRef,
+                            misc2);
     }
 
     if (numGroupPages > 0) {
@@ -160,11 +162,10 @@ void EncodeBVH(const BuildResult &build, const std::string &outPath) {
     }
 
     // Root's child points to node 1-4
-    SetChildSliceWithHalf(bvh, 0, parent, groupCenter.x, groupCenter.y,
-                          groupCenter.z, groupRadius, groupCenter.x,
-                          groupCenter.y, groupCenter.z, groupExtent.x,
-                          groupExtent.y, groupExtent.z, 0.f, 1e10f, nodeIndex,
-                          0xFFFFFFFFu);
+    SetChildSliceWithHalf(
+        bvh, 0, parent, groupCenter.x, groupCenter.y, groupCenter.z,
+        groupRadius, groupCenter.x, groupCenter.y, groupCenter.z, groupExtent.x,
+        groupExtent.y, groupExtent.z, 0.f, 1e10f, nodeIndex, 0xFFFFFFFFu);
   }
 
   WriteU32File(outPath, bvh);
@@ -185,9 +186,9 @@ void EncodeNaniteMesh(const BuildResult &build, uint32_t indexCountPerCluster,
     const auto &page = build.pages[pi];
     out[1 + pi] = runningOffsetBytes;
 
-    const uint32_t clusterCount =
-        static_cast<uint32_t>(page.clusters.size());
-    if (clusterCount == 0) continue;
+    const uint32_t clusterCount = static_cast<uint32_t>(page.clusters.size());
+    if (clusterCount == 0)
+      continue;
 
     out.push_back(clusterCount);
     const size_t clusterOffsetsStart = out.size();
@@ -200,18 +201,19 @@ void EncodeNaniteMesh(const BuildResult &build, uint32_t indexCountPerCluster,
       out[clusterOffsetsStart + ci] = clusterDataOffsetBytes;
 
       const uint32_t numVerts = static_cast<uint32_t>(cl.positions.size());
-      const uint32_t indexDataOffsetLocal =
-          7 * 4u + numVerts * 3u * 4u;
+      const uint32_t indexDataOffsetLocal = 7 * 4u + numVerts * 3u * 4u;
 
       out.push_back(indexDataOffsetLocal);
       out.push_back(static_cast<uint32_t>(cl.indices.size()));
       const float cx = (cl.boundsMin.x + cl.boundsMax.x) * 0.5f;
       const float cy = (cl.boundsMin.y + cl.boundsMax.y) * 0.5f;
       const float cz = (cl.boundsMin.z + cl.boundsMax.z) * 0.5f;
-      const float r = 0.5f * std::sqrt(
-          (cl.boundsMax.x - cl.boundsMin.x) * (cl.boundsMax.x - cl.boundsMin.x) +
-          (cl.boundsMax.y - cl.boundsMin.y) * (cl.boundsMax.y - cl.boundsMin.y) +
-          (cl.boundsMax.z - cl.boundsMin.z) * (cl.boundsMax.z - cl.boundsMin.z));
+      const float r = 0.5f * std::sqrt((cl.boundsMax.x - cl.boundsMin.x) *
+                                           (cl.boundsMax.x - cl.boundsMin.x) +
+                                       (cl.boundsMax.y - cl.boundsMin.y) *
+                                           (cl.boundsMax.y - cl.boundsMin.y) +
+                                       (cl.boundsMax.z - cl.boundsMin.z) *
+                                           (cl.boundsMax.z - cl.boundsMin.z));
       out.push_back(FloatBits(cx));
       out.push_back(FloatBits(cy));
       out.push_back(FloatBits(cz));
@@ -225,8 +227,8 @@ void EncodeNaniteMesh(const BuildResult &build, uint32_t indexCountPerCluster,
       }
 
       std::vector<uint32_t> indexRemap(indexCountPerCluster, 0);
-      const uint32_t copyCount =
-          std::min(static_cast<uint32_t>(cl.indices.size()), indexCountPerCluster);
+      const uint32_t copyCount = std::min(
+          static_cast<uint32_t>(cl.indices.size()), indexCountPerCluster);
       for (uint32_t k = 0; k < copyCount; ++k) {
         indexRemap[k] = cl.indices[k];
       }
