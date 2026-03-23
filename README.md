@@ -13,6 +13,9 @@ LOD 3:
 Complicate Model:
 ![demo_2](demo_2.png)
 
+Android Demo:
+![demo_3](demo_3.png)
+
 ## Build
 
 ```bash
