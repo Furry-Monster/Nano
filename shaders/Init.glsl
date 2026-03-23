@@ -26,6 +26,9 @@ void main() {
     }
 
     if (texcoord.x == 0 && texcoord.y == 0) {
+        // WorkArgs layout:
+        // [0]=vertexCount(384),[1] = clusterOutputOffset,
+        // [2..4]=unused,[5] = nodeOffset,[6] = nodeCount
         WorkArgs0.mData[0] = 384u;
         WorkArgs0.mData[1] = 0u;
         WorkArgs0.mData[2] = 0u;

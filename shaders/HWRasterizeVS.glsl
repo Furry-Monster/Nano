@@ -5,8 +5,8 @@ layout(binding = 0) uniform GlobalConstants {
     mat4 mViewMatrix;
     mat4 mModelMatrix;
     uvec4 mMisc0;
-    vec4 mNanite_ViewOrigin;
-    vec4 mNanite_ViewForward;
+    vec4 mNanite_ViewOrigin; // xyz: camera pos, w: lodScale
+    vec4 mNanite_ViewForward; // xyz: view dir, w: lodScaleHW
 } U_GlobalConstants;
 
 layout(std430, binding = 1) readonly buffer FClusterPageData {

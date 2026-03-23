@@ -61,8 +61,9 @@ void SortTrianglesSpatially(std::vector<Triangle> &tris,
 
   std::vector<size_t> order(tris.size());
   std::iota(order.begin(), order.end(), size_t(0));
-  std::sort(order.begin(), order.end(),
-            [&](size_t a, size_t b) { return mortonCodes[a] < mortonCodes[b]; });
+  std::sort(order.begin(), order.end(), [&](size_t a, size_t b) {
+    return mortonCodes[a] < mortonCodes[b];
+  });
 
   std::vector<Triangle> sorted(tris.size());
   for (size_t i = 0; i < tris.size(); ++i)
@@ -118,9 +119,8 @@ SimplifiedMesh SimplifyMesh(const std::vector<Vec3> &srcPositions,
 
   result.triangles.reserve(simplifiedIndexCount / 3);
   for (size_t i = 0; i + 2 < simplifiedIndexCount; i += 3) {
-    result.triangles.push_back(
-        {remap[simplified[i]], remap[simplified[i + 1]],
-         remap[simplified[i + 2]]});
+    result.triangles.push_back({remap[simplified[i]], remap[simplified[i + 1]],
+                                remap[simplified[i + 2]]});
   }
 
   return result;
@@ -141,9 +141,8 @@ std::vector<Cluster> MakeClusters(const std::vector<Triangle> &tris,
 
   for (size_t ci = 0; ci < numClusters; ++ci) {
     const size_t triStart = ci * trianglesPerCluster;
-    const size_t triEnd =
-        std::min(triStart + static_cast<size_t>(trianglesPerCluster),
-                 tris.size());
+    const size_t triEnd = std::min(
+        triStart + static_cast<size_t>(trianglesPerCluster), tris.size());
 
     Cluster cl;
     usedVerts.clear();
@@ -218,27 +217,25 @@ BuildResult BuildClustersAndPages(const LoadedMesh &mesh,
   };
   std::vector<RawMip> rawMips;
 
-  for (size_t mipIdx = 0; mipIdx < mipValues.size(); ++mipIdx) {
-    const int mipLevel = mipValues[mipIdx];
-
+  for (int mipLevel : mipValues) {
     const std::vector<Vec3> *posPtr = &mesh.positions;
     const std::vector<Triangle> *triPtr = &mesh.triangles;
     SimplifiedMesh simplified;
 
     if (mipLevel > 0) {
       float reductionFactor = std::pow(0.5f, static_cast<float>(mipLevel));
-      size_t targetTriCount = std::max(
-          size_t(1),
-          static_cast<size_t>(mesh.triangles.size() * reductionFactor));
+      size_t targetTriCount =
+          std::max(size_t(1), static_cast<size_t>(mesh.triangles.size() *
+                                                  reductionFactor));
 
-      simplified =
-          SimplifyMesh(mesh.positions, mesh.triangles, targetTriCount);
+      simplified = SimplifyMesh(mesh.positions, mesh.triangles, targetTriCount);
       posPtr = &simplified.positions;
       triPtr = &simplified.triangles;
 
-      std::cout << "  mip " << mipLevel << ": "
-                << mesh.triangles.size() << " -> " << simplified.triangles.size()
-                << " tris\n";
+      std::cout << "  mip " << mipLevel << ": simplified "
+                << mesh.triangles.size() << " -> "
+                << simplified.triangles.size() << " tris ("
+                << simplified.positions.size() << " verts)\n";
     }
 
     auto trisMip = *triPtr;
