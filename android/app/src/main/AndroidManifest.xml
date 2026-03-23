@@ -22,7 +22,7 @@
         android:theme="@style/Theme.NanoAndroid"
         android:hardwareAccelerated="true">
         <activity
-            android:name=".ModelSelectActivity"
+            android:name=".ToolSelectActivity"
             android:exported="true"
             android:screenOrientation="landscape"
             android:configChanges="orientation|screenSize|keyboardHidden">
@@ -31,6 +31,11 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <activity
+            android:name=".ModelSelectActivity"
+            android:exported="false"
+            android:screenOrientation="landscape"
+            android:configChanges="orientation|screenSize|keyboardHidden" />
         <activity
             android:name=".MainActivity"
             android:exported="false"

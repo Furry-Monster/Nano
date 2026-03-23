@@ -107,6 +107,41 @@ static uint32_t LodValueFromCameraDistance() {
 
 static unsigned char *LoadFileContent(const char *path, size_t &outSize) {
 #ifdef __ANDROID__
+  // Absolute path: load from filesystem (imported models)
+  if (path[0] == '/') {
+    FILE *file = std::fopen(path, "rb");
+    if (!file) {
+      spdlog::error("Failed to open file: {}", path);
+      outSize = 0;
+      return nullptr;
+    }
+    if (std::fseek(file, 0, SEEK_END) != 0) {
+      std::fclose(file);
+      outSize = 0;
+      return nullptr;
+    }
+    const long sizeLong = std::ftell(file);
+    if (sizeLong < 0) {
+      std::fclose(file);
+      outSize = 0;
+      return nullptr;
+    }
+    outSize = static_cast<size_t>(sizeLong);
+    if (std::fseek(file, 0, SEEK_SET) != 0 || outSize == 0) {
+      std::fclose(file);
+      return nullptr;
+    }
+    auto *content = new unsigned char[outSize];
+    const size_t read = std::fread(content, 1, outSize, file);
+    std::fclose(file);
+    if (read != outSize) {
+      delete[] content;
+      outSize = 0;
+      return nullptr;
+    }
+    return content;
+  }
+  // Asset path: load from APK assets
   AAssetManager *mgr = GetAndroidAssetManager();
   AAsset *asset = AAssetManager_open(mgr, path, AASSET_MODE_BUFFER);
   if (!asset) {

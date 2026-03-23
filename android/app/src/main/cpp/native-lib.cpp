@@ -13,6 +13,7 @@
 #include "render/vulkan_rhi.h"
 #include "scene/scene.h"
 #include "input/input.h"
+#include "exporter/export_android.h"
 
 #include <sstream>
 
@@ -168,6 +169,22 @@ Java_com_example_nano_1android_NanoRenderer_nativeLODUp(JNIEnv *, jobject) {
 JNIEXPORT void JNICALL
 Java_com_example_nano_1android_NanoRenderer_nativeLODDown(JNIEnv *, jobject) {
     if (sInitialized.load()) SceneLODDown();
+}
+
+JNIEXPORT jstring JNICALL
+Java_com_example_nano_1android_NanoRenderer_nativeExportModel(
+    JNIEnv *env, jobject, jstring inputPath, jstring outputDir) {
+    const char *inp = env->GetStringUTFChars(inputPath, nullptr);
+    const char *outp = env->GetStringUTFChars(outputDir, nullptr);
+    std::string err;
+    if (inp && outp) {
+        err = ExportModelAndroid(std::string(inp), std::string(outp));
+    } else {
+        err = "Invalid paths";
+    }
+    if (inp) env->ReleaseStringUTFChars(inputPath, inp);
+    if (outp) env->ReleaseStringUTFChars(outputDir, outp);
+    return env->NewStringUTF(err.empty() ? "OK" : err.c_str());
 }
 
 JNIEXPORT jstring JNICALL

@@ -9,6 +9,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.example.nano_android.databinding.ActivityModelSelectBinding
+import java.io.File
 
 class ModelSelectActivity : AppCompatActivity() {
 
@@ -19,7 +20,7 @@ class ModelSelectActivity : AppCompatActivity() {
         binding = ActivityModelSelectBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        val models = listAvailableModels(assets)
+        val models = listAvailableModels(assets) + listImportedModels(this)
         if (models.isEmpty()) {
             binding.emptyHint.visibility = View.VISIBLE
             binding.modelList.visibility = View.GONE
@@ -62,7 +63,29 @@ class ModelSelectActivity : AppCompatActivity() {
                     }
                 }
             }
-            return models.sortedBy { it.name }
+            return models
+        }
+
+        fun listImportedModels(context: android.content.Context): List<ModelInfo> {
+            val models = mutableListOf<ModelInfo>()
+            val modelsDir = File(context.getExternalFilesDir(null), "models")
+            if (!modelsDir.exists()) return models
+            modelsDir.listFiles()?.filter { it.isDirectory }?.forEach { dir ->
+                dir.listFiles()?.let { files ->
+                    val bvh = files.find { it.name.endsWith(".bvh") }
+                    val mesh = files.find { it.name.endsWith(".nanomesh") }
+                    if (bvh != null && mesh != null) {
+                        models.add(
+                            ModelInfo(
+                                name = dir.name,
+                                bvhPath = bvh.absolutePath,
+                                meshPath = mesh.absolutePath
+                            )
+                        )
+                    }
+                }
+            }
+            return models
         }
     }
 }
